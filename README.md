@@ -4,7 +4,7 @@ Plugin para MDVCraft / Purpur 1.21.6.
 
 Genera minerales como `PLAYER_HEAD` reales usando la textura tomada desde MMOItems.
 
-## v1.0.2
+## v1.0.3
 
 Cambios principales:
 
@@ -54,3 +54,18 @@ Pasos:
 3. Ejecuta `Build MDVHeadOres`.
 4. Descarga el artifact `MDVHeadOres-jar`.
 5. Sube el `.jar` a `/plugins/`.
+
+
+## Cambios v1.0.3
+
+- Evita generar cabezas pegadas a minerales vanilla como lapislázuli, diamante, hierro, redstone, etc.
+- Aplica actualización física al colocar las cabezas para reducir bloques fantasma/actualizaciones raras.
+- Añade `/mdvheadores inspect` para mirar un bloque y confirmar si realmente es una veta marcada por el plugin.
+
+Si ya existe una config antigua, añade estas opciones dentro de cada veta:
+
+```yml
+avoid-near-vanilla-ores: true
+avoid-near-materials: []
+apply-physics-on-place: true
+```

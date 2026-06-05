@@ -1,6 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.0.2: el mineral ahora se dropea en el mundo, ignora Silk Touch y puede requerir poder de pico.
+# v1.0.3: evita colocar cabezas pegadas a minerales vanilla y aplica actualizaciones físicas al colocar.
 
 debug: true
 
@@ -63,6 +63,18 @@ ores:
 
     # FLOOR_HEAD reemplaza piedra por una cabeza puesta en el suelo.
     placement: FLOOR_HEAD
+
+    # Evita bugs raros con minerales vanilla pegados a las cabezas.
+    # Si está true, no coloca una cabeza si al lado/arriba/abajo hay un mineral vanilla
+    # como LAPIS_ORE, DIAMOND_ORE, IRON_ORE, etc.
+    avoid-near-vanilla-ores: true
+
+    # Lista extra opcional de bloques a evitar alrededor de la cabeza.
+    avoid-near-materials: []
+
+    # Aplica física/actualización de vecinos al colocar la cabeza.
+    # Ayuda a evitar bloques fantasma o actualizaciones raras cerca de minerales vanilla.
+    apply-physics-on-place: true
 
     # Evita que Minecraft dropee la cabeza vanilla.
     prevent-vanilla-drops: true

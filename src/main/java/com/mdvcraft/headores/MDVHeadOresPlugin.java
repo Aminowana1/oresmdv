@@ -179,6 +179,20 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             ore.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
             ore.fallbackCommand = sec.getString("fallback-command", null);
 
+            ore.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
+            ore.avoidNearMaterials = new HashSet<>();
+            if (sec.getBoolean("avoid-near-vanilla-ores", true)) {
+                ore.avoidNearMaterials.addAll(defaultVanillaOreMaterials());
+            }
+            for (String matName : sec.getStringList("avoid-near-materials")) {
+                Material mat = Material.matchMaterial(matName);
+                if (mat != null && mat.isBlock()) {
+                    ore.avoidNearMaterials.add(mat);
+                } else {
+                    getLogger().warning("Material inválido en avoid-near-materials de '" + key + "': " + matName);
+                }
+            }
+
             ores.put(key, ore);
             if (debug) getLogger().info("Veta cargada: " + key + " -> " + miBlockId + " drop " + ore.dropType + ":" + ore.dropId + " poder requerido " + ore.requiredPickaxePower);
         }
@@ -606,7 +620,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             int y = minY + random.nextInt(maxY - minY + 1);
             int z = (chunk.getZ() << 4) + random.nextInt(16);
             Block candidate = world.getBlockAt(x, y, z);
-            if (ore.replace.contains(candidate.getType())) {
+            if (canPlaceOreAt(candidate, ore)) {
                 start = candidate;
                 break;
             }
@@ -619,7 +633,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         Block current = start;
 
         for (int i = 0; i < targetAmount; i++) {
-            if (current != null && ore.replace.contains(current.getType())) {
+            if (current != null && canPlaceOreAt(current, ore)) {
                 if (placeHeadOre(current, ore)) placed++;
             }
 
@@ -641,13 +655,52 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         for (int i = 0; i < 8; i++) {
             BlockFace face = faces[random.nextInt(faces.length)];
             Block next = origin.getRelative(face);
-            if (ore.replace.contains(next.getType())) return next;
+            if (canPlaceOreAt(next, ore)) return next;
         }
         return null;
     }
 
+    private boolean canPlaceOreAt(Block block, OreDefinition ore) {
+        if (block == null || !ore.replace.contains(block.getType())) return false;
+        if (!ore.avoidNearMaterials.isEmpty() && isNearAvoidedMaterial(block, ore)) return false;
+        return true;
+    }
+
+    private boolean isNearAvoidedMaterial(Block block, OreDefinition ore) {
+        BlockFace[] faces = new BlockFace[] {
+                BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST,
+                BlockFace.WEST, BlockFace.UP, BlockFace.DOWN
+        };
+
+        for (BlockFace face : faces) {
+            if (ore.avoidNearMaterials.contains(block.getRelative(face).getType())) return true;
+        }
+        return false;
+    }
+
+    private Set<Material> defaultVanillaOreMaterials() {
+        Set<Material> set = new HashSet<>();
+        String[] names = new String[] {
+                "COAL_ORE", "DEEPSLATE_COAL_ORE",
+                "COPPER_ORE", "DEEPSLATE_COPPER_ORE",
+                "IRON_ORE", "DEEPSLATE_IRON_ORE",
+                "GOLD_ORE", "DEEPSLATE_GOLD_ORE",
+                "REDSTONE_ORE", "DEEPSLATE_REDSTONE_ORE",
+                "EMERALD_ORE", "DEEPSLATE_EMERALD_ORE",
+                "LAPIS_ORE", "DEEPSLATE_LAPIS_ORE",
+                "DIAMOND_ORE", "DEEPSLATE_DIAMOND_ORE",
+                "NETHER_GOLD_ORE", "NETHER_QUARTZ_ORE",
+                "ANCIENT_DEBRIS"
+        };
+        for (String name : names) {
+            Material mat = Material.matchMaterial(name);
+            if (mat != null) set.add(mat);
+        }
+        return set;
+    }
+
     private boolean placeHeadOre(Block block, OreDefinition ore) {
-        block.setType(Material.PLAYER_HEAD, false);
+        block.setType(Material.PLAYER_HEAD, ore.applyPhysicsOnPlace);
 
         BlockState state = block.getState();
         if (!(state instanceof Skull skull)) {
@@ -672,7 +725,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         pdc.set(dropTypeKey, PersistentDataType.STRING, ore.dropType);
         pdc.set(dropIdKey, PersistentDataType.STRING, ore.dropId);
 
-        skull.update(true, false);
+        skull.update(true, ore.applyPhysicsOnPlace);
         return true;
     }
 
@@ -727,13 +780,41 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         }
 
         if (args.length == 0) {
-            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload o /mdvheadores generate <radio> [force]");
+            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
             return true;
         }
 
         if (args[0].equalsIgnoreCase("reload")) {
             loadSettings();
             sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aMDVHeadOres recargado. Vetas: §f" + ores.size());
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("inspect")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("Este comando solo puede usarlo un jugador.");
+                return true;
+            }
+
+            Block target = player.getTargetBlockExact(8);
+            if (target == null) {
+                sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §cNo estás mirando ningún bloque cercano.");
+                return true;
+            }
+
+            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eBloque: §f" + target.getType().name() + " §7en §f" + target.getWorld().getName() + " " + target.getX() + " " + target.getY() + " " + target.getZ());
+            BlockState state = target.getState();
+            if (state instanceof TileState tileState) {
+                PersistentDataContainer pdc = tileState.getPersistentDataContainer();
+                String oreName = pdc.get(oreKey, PersistentDataType.STRING);
+                if (oreName != null) {
+                    sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aEs una veta MDVHeadOres: §f" + oreName);
+                } else {
+                    sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §7No tiene marca de veta MDVHeadOres.");
+                }
+            } else {
+                sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §7No es TileState; no puede tener marca del plugin.");
+            }
             return true;
         }
 
@@ -768,7 +849,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
-        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload o /mdvheadores generate <radio> [force]");
+        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
         return true;
     }
 
@@ -796,5 +877,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String breakSound;
         String failSound;
         String fallbackCommand;
+        boolean applyPhysicsOnPlace;
+        Set<Material> avoidNearMaterials;
     }
 }
