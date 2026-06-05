@@ -345,7 +345,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             PlayerTextures textures = profile.getTextures();
             textures.setSkin(new URL("http://textures.minecraft.net/texture/" + textureHash));
             profile.setTextures(textures);
-            skull.setPlayerProfile(profile);
+            skull.setOwnerProfile(profile);
         } catch (MalformedURLException exception) {
             getLogger().warning("URL de textura inválida para cabeza: " + textureHash);
         }

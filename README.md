@@ -101,21 +101,3 @@ Esto no hace que MMOItems customblocks maneje el drop directamente, porque la ve
 ```txt
 mi give MATERIAL CRISTALVERDE <jugador> 1
 ```
-
-
-## Compilar sin instalar Java ni Maven usando GitHub Actions
-
-Este ZIP ya incluye:
-
-```txt
-.github/workflows/build.yml
-```
-
-Pasos:
-1. Crea un repositorio en GitHub.
-2. Sube todos los archivos de esta carpeta.
-3. Entra a la pestaña `Actions`.
-4. Abre `Build MDVHeadOres`.
-5. Pulsa `Run workflow`.
-6. Cuando termine, descarga el artifact `MDVHeadOres-jar`.
-7. Dentro estará el `.jar` para subir a `/plugins/`.
