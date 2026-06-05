@@ -13,6 +13,8 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Skull;
 import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Directional;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
@@ -56,9 +58,12 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
     private final Random random = new Random();
     private final Map<String, OreDefinition> ores = new HashMap<>();
+    private final Map<String, TreeNodeDefinition> treeNodes = new HashMap<>();
     private final Pattern powerLorePattern = Pattern.compile("(?i)(poder\\s+de\\s+pico|pickaxe\\s+power|pickaxe-power).*?([+-]?\\d+(?:[\\.,]\\d+)?)");
+    private final Pattern axePowerLorePattern = Pattern.compile("(?i)(poder\\s+de\\s+hacha|axe\\s+power|axe-power).*?([+-]?\\d+(?:[\\.,]\\d+)?)");
 
     private NamespacedKey oreKey;
+    private NamespacedKey nodeKey;
     private NamespacedKey blockIdKey;
     private NamespacedKey dropTypeKey;
     private NamespacedKey dropIdKey;
@@ -68,14 +73,17 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private boolean generateOnNewChunks;
     private boolean markGeneratedChunks;
     private boolean vanillaPickaxesHavePower;
+    private boolean vanillaAxesHavePower;
     private String defaultFallbackCommand;
     private String noPowerMessage;
+    private String noAxePowerMessage;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
         oreKey = new NamespacedKey(this, "ore_key");
+        nodeKey = new NamespacedKey(this, "tree_node_key");
         blockIdKey = new NamespacedKey(this, "mmoitems_block_id");
         dropTypeKey = new NamespacedKey(this, "drop_type");
         dropIdKey = new NamespacedKey(this, "drop_id");
@@ -83,7 +91,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
         loadSettings();
         Bukkit.getPluginManager().registerEvents(this, this);
-        getLogger().info("MDVHeadOres activado. Vetas cargadas: " + ores.size());
+        getLogger().info("MDVHeadOres activado. Vetas cargadas: " + ores.size() + ", nodos de árbol cargados: " + treeNodes.size());
     }
 
     private void loadSettings() {
@@ -94,10 +102,13 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         generateOnNewChunks = cfg.getBoolean("generate-on-new-chunks", true);
         markGeneratedChunks = cfg.getBoolean("mark-generated-chunks", true);
         vanillaPickaxesHavePower = cfg.getBoolean("vanilla-pickaxes-have-power", true);
+        vanillaAxesHavePower = cfg.getBoolean("vanilla-axes-have-power", true);
         defaultFallbackCommand = cfg.getString("default-fallback-command", "mi give %drop_type% %drop_id% %player% %amount%");
         noPowerMessage = cfg.getString("no-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
+        noAxePowerMessage = cfg.getString("no-axe-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
 
         ores.clear();
+        treeNodes.clear();
 
         File miBlockFile = new File(getServer().getWorldContainer(), cfg.getString("mmoitems-block-file", "plugins/MMOItems/item/block.yml"));
         YamlConfiguration mmoBlocks = YamlConfiguration.loadConfiguration(miBlockFile);
@@ -196,6 +207,87 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             ores.put(key, ore);
             if (debug) getLogger().info("Veta cargada: " + key + " -> " + miBlockId + " drop " + ore.dropType + ":" + ore.dropId + " poder requerido " + ore.requiredPickaxePower);
         }
+
+        loadTreeNodes(cfg, mmoBlocks);
+    }
+
+    private void loadTreeNodes(FileConfiguration cfg, YamlConfiguration mmoBlocks) {
+        ConfigurationSection nodeSection = cfg.getConfigurationSection("tree-nodes");
+        if (nodeSection == null) {
+            if (debug) getLogger().info("No hay sección 'tree-nodes' en config.yml.");
+            return;
+        }
+
+        for (String key : nodeSection.getKeys(false)) {
+            ConfigurationSection sec = nodeSection.getConfigurationSection(key);
+            if (sec == null || !sec.getBoolean("enabled", true)) continue;
+
+            String miBlockId = sec.getString("mmoitems-block-id", "").trim();
+            if (miBlockId.isEmpty()) {
+                getLogger().warning("El nodo de árbol '" + key + "' no tiene mmoitems-block-id.");
+                continue;
+            }
+
+            String rawTexture = sec.getString("skull-texture", null);
+            if (sec.getBoolean("texture-from-mmoitems", true)) {
+                String fromMi = mmoBlocks.getString(miBlockId + ".base.skull-texture.value", null);
+                if (fromMi != null && !fromMi.isBlank()) rawTexture = fromMi;
+            }
+
+            String textureHash = extractTextureHash(rawTexture);
+            if (textureHash == null || textureHash.isBlank()) {
+                getLogger().warning("No pude leer textura para el nodo de árbol '" + key + "' usando el bloque MMOItems '" + miBlockId + "'.");
+                continue;
+            }
+
+            String displayName = sec.getString("display-name", null);
+            if (sec.getBoolean("name-from-mmoitems", true)) {
+                String fromMi = mmoBlocks.getString(miBlockId + ".base.name", null);
+                if (fromMi != null && !fromMi.isBlank()) displayName = fromMi;
+            }
+            if (displayName == null || displayName.isBlank()) displayName = key;
+
+            List<Material> attachTo = new ArrayList<>();
+            for (String matName : sec.getStringList("attach-to")) {
+                Material mat = Material.matchMaterial(matName);
+                if (mat != null && mat.isBlock()) {
+                    attachTo.add(mat);
+                } else {
+                    getLogger().warning("Material inválido en attach-to de '" + key + "': " + matName);
+                }
+            }
+            if (attachTo.isEmpty()) {
+                getLogger().warning("El nodo de árbol '" + key + "' no tiene bloques válidos en attach-to.");
+                continue;
+            }
+
+            TreeNodeDefinition node = new TreeNodeDefinition();
+            node.key = key;
+            node.mmoitemsBlockId = miBlockId;
+            node.textureHash = textureHash;
+            node.displayName = displayName;
+            node.worlds = new HashSet<>(sec.getStringList("worlds"));
+            node.attachTo = attachTo;
+            node.minY = sec.getInt("min-y", 50);
+            node.maxY = sec.getInt("max-y", 120);
+            node.chunkChance = sec.getDouble("chunk-chance", 0.12);
+            node.nodesPerChunk = Math.max(1, sec.getInt("nodes-per-chunk", 1));
+            node.dropType = sec.getString("drop-type", "MATERIAL");
+            node.dropId = sec.getString("drop-id", "");
+            node.dropAmount = Math.max(1, sec.getInt("drop-amount", 1));
+            node.preventVanillaDrops = sec.getBoolean("prevent-vanilla-drops", true);
+            node.ignoreSilkTouch = sec.getBoolean("ignore-silk-touch", true);
+            node.dropNaturally = sec.getBoolean("drop-naturally", true);
+            node.requiredAxePower = Math.max(0, sec.getDouble("required-axe-power", 0));
+            node.breakSound = sec.getString("break-sound", "BLOCK_WOOD_BREAK");
+            node.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
+            node.fallbackCommand = sec.getString("fallback-command", null);
+            node.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
+            node.onlyOnSurfaceLogs = sec.getBoolean("only-on-surface-logs", true);
+
+            treeNodes.put(key, node);
+            if (debug) getLogger().info("Nodo de árbol cargado: " + key + " -> " + miBlockId + " drop " + node.dropType + ":" + node.dropId + " poder hacha requerido " + node.requiredAxePower);
+        }
     }
 
     @EventHandler
@@ -217,6 +309,13 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
         PersistentDataContainer pdc = tileState.getPersistentDataContainer();
         String oreName = pdc.get(oreKey, PersistentDataType.STRING);
+        String nodeName = pdc.get(nodeKey, PersistentDataType.STRING);
+
+        if (oreName == null && nodeName != null) {
+            handleTreeNodeBreak(event, nodeName);
+            return;
+        }
+
         if (oreName == null) return;
 
         OreDefinition ore = ores.get(oreName);
@@ -262,6 +361,51 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
     }
 
+    private void handleTreeNodeBreak(BlockBreakEvent event, String nodeName) {
+        Block block = event.getBlock();
+        TreeNodeDefinition node = treeNodes.get(nodeName);
+        if (node == null) {
+            if (debug) getLogger().warning("Se rompió un nodo de árbol desconocido: " + nodeName);
+            event.setDropItems(false);
+            return;
+        }
+
+        Player player = event.getPlayer();
+
+        if (node.requiredAxePower > 0) {
+            double currentPower = getAxePower(player.getInventory().getItemInMainHand());
+            if (currentPower + 0.0001 < node.requiredAxePower) {
+                event.setCancelled(true);
+                String msg = noAxePowerMessage
+                        .replace("%required%", formatNumber(node.requiredAxePower))
+                        .replace("%power%", formatNumber(currentPower))
+                        .replace("%node%", node.key);
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&', msg));
+                playConfiguredSound(block.getLocation(), node.failSound, 0.7f, 0.75f);
+                return;
+            }
+        }
+
+        if (node.preventVanillaDrops || node.ignoreSilkTouch) {
+            event.setDropItems(false);
+        }
+
+        if (node.dropNaturally) {
+            ItemStack drop = buildMmoItemStack(node.dropType, node.dropId, node.dropAmount);
+            if (drop != null && drop.getType() != Material.AIR) {
+                Location dropLoc = block.getLocation().add(0.5, 0.35, 0.5);
+                Item dropped = block.getWorld().dropItemNaturally(dropLoc, drop);
+                dropped.setPickupDelay(10);
+            } else {
+                runFallbackCommand(node, player, block);
+            }
+        } else {
+            runFallbackCommand(node, player, block);
+        }
+
+        playConfiguredSound(block.getLocation(), node.breakSound, 0.8f, 1.05f);
+    }
+
     private void runFallbackCommand(OreDefinition ore, Player player, Block block) {
         String command = ore.fallbackCommand;
         if (command == null || command.isBlank()) {
@@ -282,6 +426,29 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         if (command.startsWith("/")) command = command.substring(1);
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
         if (debug) getLogger().warning("No pude crear el ItemStack MMOItems para " + ore.dropType + ":" + ore.dropId + ". Usé fallback-command.");
+    }
+
+    private void runFallbackCommand(TreeNodeDefinition node, Player player, Block block) {
+        String command = node.fallbackCommand;
+        if (command == null || command.isBlank()) {
+            command = defaultFallbackCommand;
+        }
+
+        command = command
+                .replace("%player%", player.getName())
+                .replace("%world%", block.getWorld().getName())
+                .replace("%x%", Integer.toString(block.getX()))
+                .replace("%y%", Integer.toString(block.getY()))
+                .replace("%z%", Integer.toString(block.getZ()))
+                .replace("%ore%", node.key)
+                .replace("%node%", node.key)
+                .replace("%drop_type%", node.dropType)
+                .replace("%drop_id%", node.dropId)
+                .replace("%amount%", Integer.toString(node.dropAmount));
+
+        if (command.startsWith("/")) command = command.substring(1);
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+        if (debug) getLogger().warning("No pude crear el ItemStack MMOItems para " + node.dropType + ":" + node.dropId + ". Usé fallback-command.");
     }
 
     private ItemStack buildMmoItemStack(String typeId, String itemId, int amount) {
@@ -396,6 +563,98 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         }
 
         return 0;
+    }
+
+    private double getAxePower(ItemStack item) {
+        if (item == null || item.getType() == Material.AIR) return 0;
+
+        Double fromPdc = readAxePowerFromPersistentData(item);
+        if (fromPdc != null) return fromPdc;
+
+        Double fromNbt = readAxePowerFromMmoItemsNbt(item);
+        if (fromNbt != null) return fromNbt;
+
+        Double fromLore = readAxePowerFromLore(item);
+        if (fromLore != null) return fromLore;
+
+        if (vanillaAxesHavePower) {
+            return vanillaAxePower(item.getType());
+        }
+
+        return 0;
+    }
+
+    private Double readAxePowerFromPersistentData(ItemStack item) {
+        if (!item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return null;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+
+        for (NamespacedKey key : pdc.getKeys()) {
+            String raw = (key.getNamespace() + ":" + key.getKey()).toLowerCase(Locale.ROOT);
+            if (!raw.contains("axe") || !raw.contains("power")) continue;
+
+            Double value = readDoubleFromPdc(pdc, key);
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private Double readAxePowerFromMmoItemsNbt(ItemStack item) {
+        try {
+            Class<?> nbtClass = Class.forName("net.Indyuce.mmoitems.api.item.nbt.NBTItem");
+            Object nbtItem = createMmoNbtItem(nbtClass, item);
+            if (nbtItem == null) return null;
+
+            String[] tags = new String[] {
+                    "MMOITEMS_AXE_POWER",
+                    "AXE_POWER",
+                    "axe-power",
+                    "axe_power"
+            };
+
+            for (String tag : tags) {
+                Boolean has = tryInvokeBoolean(nbtItem, "hasTag", tag);
+                if (has != null && !has) continue;
+
+                Double value = tryInvokeDouble(nbtItem, "getDouble", tag);
+                if (value != null && value > 0) return value;
+
+                Integer intValue = tryInvokeInteger(nbtItem, "getInteger", tag);
+                if (intValue == null) intValue = tryInvokeInteger(nbtItem, "getInt", tag);
+                if (intValue != null && intValue > 0) return intValue.doubleValue();
+
+                String strValue = tryInvokeString(nbtItem, "getString", tag);
+                if (strValue != null && !strValue.isBlank()) {
+                    try {
+                        return Double.parseDouble(strValue.replace(',', '.'));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        } catch (Throwable throwable) {
+            if (debug) getLogger().warning("No pude leer NBT de MMOItems para poder de hacha: " + throwable.getClass().getSimpleName());
+        }
+        return null;
+    }
+
+    private Double readAxePowerFromLore(ItemStack item) {
+        if (!item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null || !meta.hasLore() || meta.getLore() == null) return null;
+
+        for (String line : meta.getLore()) {
+            String clean = ChatColor.stripColor(line);
+            if (clean == null) continue;
+            Matcher matcher = axePowerLorePattern.matcher(clean);
+            if (!matcher.find()) continue;
+
+            try {
+                return Double.parseDouble(matcher.group(2).replace(',', '.'));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
     }
 
     private Double readPowerFromPersistentData(ItemStack item) {
@@ -562,6 +821,18 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         };
     }
 
+    private double vanillaAxePower(Material material) {
+        return switch (material) {
+            case WOODEN_AXE -> 1;
+            case STONE_AXE -> 2;
+            case IRON_AXE -> 3;
+            case GOLDEN_AXE -> 2;
+            case DIAMOND_AXE -> 4;
+            case NETHERITE_AXE -> 5;
+            default -> 0;
+        };
+    }
+
     private String formatNumber(double value) {
         if (Math.abs(value - Math.rint(value)) < 0.0001) {
             return Integer.toString((int) Math.rint(value));
@@ -580,7 +851,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     }
 
     private void generateInChunk(Chunk chunk, boolean force, boolean fromCommand) {
-        if (ores.isEmpty()) return;
+        if (ores.isEmpty() && treeNodes.isEmpty()) return;
 
         if (markGeneratedChunks && !force) {
             String marked = chunk.getPersistentDataContainer().get(generatedChunkKey, PersistentDataType.STRING);
@@ -596,6 +867,15 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
             for (int i = 0; i < ore.veinsPerChunk; i++) {
                 placed += generateVein(chunk, ore, force);
+            }
+        }
+
+        for (TreeNodeDefinition node : treeNodes.values()) {
+            if (!node.worlds.isEmpty() && !node.worlds.contains(world.getName())) continue;
+            if (!force && random.nextDouble() > node.chunkChance) continue;
+
+            for (int i = 0; i < node.nodesPerChunk; i++) {
+                placed += generateTreeNode(chunk, node);
             }
         }
 
@@ -699,6 +979,86 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         return set;
     }
 
+    private int generateTreeNode(Chunk chunk, TreeNodeDefinition node) {
+        World world = chunk.getWorld();
+        int minY = Math.max(world.getMinHeight(), node.minY);
+        int maxY = Math.min(world.getMaxHeight() - 1, node.maxY);
+        if (minY > maxY) return 0;
+
+        for (int attempt = 0; attempt < 160; attempt++) {
+            int x = (chunk.getX() << 4) + random.nextInt(16);
+            int y = minY + random.nextInt(maxY - minY + 1);
+            int z = (chunk.getZ() << 4) + random.nextInt(16);
+            Block log = world.getBlockAt(x, y, z);
+            if (!node.attachTo.contains(log.getType())) continue;
+
+            BlockFace face = findFreeSideForNode(log, node);
+            if (face == null) continue;
+
+            Block target = log.getRelative(face);
+            if (placeTreeNode(target, face, node)) return 1;
+        }
+
+        return 0;
+    }
+
+    private BlockFace findFreeSideForNode(Block log, TreeNodeDefinition node) {
+        BlockFace[] faces = new BlockFace[] {
+                BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST
+        };
+
+        for (int i = 0; i < faces.length; i++) {
+            BlockFace face = faces[random.nextInt(faces.length)];
+            Block target = log.getRelative(face);
+            if (!isAirForTreeNode(target)) continue;
+            if (node.onlyOnSurfaceLogs && !hasEnoughAirAroundNode(target)) continue;
+            return face;
+        }
+        return null;
+    }
+
+    private boolean isAirForTreeNode(Block block) {
+        Material type = block.getType();
+        return type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR;
+    }
+
+    private boolean hasEnoughAirAroundNode(Block target) {
+        int air = 0;
+        BlockFace[] faces = new BlockFace[] {
+                BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP
+        };
+        for (BlockFace face : faces) {
+            if (target.getRelative(face).getType().isAir()) air++;
+        }
+        return air >= 2;
+    }
+
+    private boolean placeTreeNode(Block block, BlockFace facing, TreeNodeDefinition node) {
+        block.setType(Material.PLAYER_WALL_HEAD, node.applyPhysicsOnPlace);
+
+        BlockData data = block.getBlockData();
+        if (data instanceof Directional directional) {
+            directional.setFacing(facing);
+            block.setBlockData(directional, node.applyPhysicsOnPlace);
+        }
+
+        BlockState state = block.getState();
+        if (!(state instanceof Skull skull)) {
+            return false;
+        }
+
+        applyTexture(skull, node.textureHash);
+
+        PersistentDataContainer pdc = skull.getPersistentDataContainer();
+        pdc.set(nodeKey, PersistentDataType.STRING, node.key);
+        pdc.set(blockIdKey, PersistentDataType.STRING, node.mmoitemsBlockId);
+        pdc.set(dropTypeKey, PersistentDataType.STRING, node.dropType);
+        pdc.set(dropIdKey, PersistentDataType.STRING, node.dropId);
+
+        skull.update(true, node.applyPhysicsOnPlace);
+        return true;
+    }
+
     private boolean placeHeadOre(Block block, OreDefinition ore) {
         block.setType(Material.PLAYER_HEAD, ore.applyPhysicsOnPlace);
 
@@ -786,7 +1146,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
         if (args[0].equalsIgnoreCase("reload")) {
             loadSettings();
-            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aMDVHeadOres recargado. Vetas: §f" + ores.size());
+            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aMDVHeadOres recargado. Vetas: §f" + ores.size() + " §aNodos: §f" + treeNodes.size());
             return true;
         }
 
@@ -810,7 +1170,12 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
                 if (oreName != null) {
                     sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aEs una veta MDVHeadOres: §f" + oreName);
                 } else {
-                    sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §7No tiene marca de veta MDVHeadOres.");
+                    String nodeName = pdc.get(nodeKey, PersistentDataType.STRING);
+                    if (nodeName != null) {
+                        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aEs un nodo de árbol MDVHeadOres: §f" + nodeName);
+                    } else {
+                        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §7No tiene marca de veta/nodo MDVHeadOres.");
+                    }
                 }
             } else {
                 sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §7No es TileState; no puede tener marca del plugin.");
@@ -851,6 +1216,31 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
         sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
         return true;
+    }
+
+    private static final class TreeNodeDefinition {
+        String key;
+        String mmoitemsBlockId;
+        String textureHash;
+        String displayName;
+        Set<String> worlds;
+        List<Material> attachTo;
+        int minY;
+        int maxY;
+        double chunkChance;
+        int nodesPerChunk;
+        String dropType;
+        String dropId;
+        int dropAmount;
+        boolean preventVanillaDrops;
+        boolean ignoreSilkTouch;
+        boolean dropNaturally;
+        double requiredAxePower;
+        String breakSound;
+        String failSound;
+        String fallbackCommand;
+        boolean applyPhysicsOnPlace;
+        boolean onlyOnSurfaceLogs;
     }
 
     private static final class OreDefinition {

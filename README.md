@@ -69,3 +69,45 @@ avoid-near-vanilla-ores: true
 avoid-near-materials: []
 apply-physics-on-place: true
 ```
+
+
+## v1.0.4 - Nodos de árboles
+
+Esta versión añade `tree-nodes`, recursos visuales como PLAYER_WALL_HEAD pegados al costado de troncos.
+
+El poder requerido se lee desde el lore del hacha/item:
+
+```yaml
+- '&3 &7■ &fPoder de Hacha: 2'
+```
+
+Ejemplo de config:
+
+```yaml
+tree-nodes:
+  brote_resinoso:
+    enabled: true
+    mmoitems-block-id: "BROTERESINOSO"
+    drop-id: "BROTERESINOSO"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+    worlds:
+      - world
+    attach-to:
+      - OAK_LOG
+      - SPRUCE_LOG
+    min-y: 50
+    max-y: 120
+    chunk-chance: 0.12
+    nodes-per-chunk: 1
+    required-axe-power: 2
+    only-on-surface-logs: true
+    apply-physics-on-place: true
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+    break-sound: "BLOCK_WOOD_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+```

@@ -17,6 +17,10 @@ mark-generated-chunks: true
 # madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
 vanilla-pickaxes-have-power: true
 
+# Si está true, las hachas vanilla tienen poder básico:
+# madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
+vanilla-axes-have-power: true
+
 # Fallback si por algún motivo el plugin no logra construir el item de MMOItems para dropearlo.
 # Normalmente NO se usa. Solo queda como seguridad.
 # Variables: %player%, %world%, %x%, %y%, %z%, %ore%, %drop_type%, %drop_id%, %amount%
@@ -24,6 +28,9 @@ default-fallback-command: "mi give %drop_type% %drop_id% %player% %amount%"
 
 # Mensaje si el pico no tiene poder suficiente.
 no-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."
+
+# Mensaje si el hacha no tiene poder suficiente para nodos de árboles.
+no-axe-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."
 
 ores:
   viridita:
@@ -92,4 +99,61 @@ ores:
     required-pickaxe-power: 1
 
     break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+
+# Nodos de árboles: recursos como retoños, savia, hongos o ramitas pegadas al costado de troncos.
+# Funcionan igual que las vetas, pero se colocan como PLAYER_WALL_HEAD al lado de troncos.
+# Para minarlos, el item debe tener lore como:
+# '&3 &7■ &fPoder de Hacha: 2'
+tree-nodes:
+  brote_resinoso:
+    enabled: false
+
+    # ID del bloque/cabeza dentro de plugins/MMOItems/item/block.yml
+    mmoitems-block-id: "BROTERESINOSO"
+
+    # Item de MMOItems que se dropea al romper el nodo.
+    drop-id: "BROTERESINOSO"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    # Troncos donde puede aparecer pegado.
+    attach-to:
+      - OAK_LOG
+      - SPRUCE_LOG
+      - BIRCH_LOG
+      - JUNGLE_LOG
+      - ACACIA_LOG
+      - DARK_OAK_LOG
+      - MANGROVE_LOG
+      - CHERRY_LOG
+      - PALE_OAK_LOG
+
+    min-y: 50
+    max-y: 120
+
+    # Probabilidad por chunk y cantidad de nodos.
+    chunk-chance: 0.12
+    nodes-per-chunk: 1
+
+    # Requiere hacha/item con Poder de Hacha.
+    required-axe-power: 2
+
+    # Si está true, intenta colocarlo en troncos con aire alrededor, más visible como retoño/ramita.
+    only-on-surface-logs: true
+
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    break-sound: "BLOCK_WOOD_BREAK"
     fail-sound: "BLOCK_NOTE_BLOCK_BASS"
