@@ -1,0 +1,60 @@
+# MDVHeadOres
+# Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
+# El item dropeado se entrega con un comando de MMOItems.
+
+debug: true
+
+# Ruta al archivo de bloques de MMOItems, relativa a la carpeta raíz del servidor.
+mmoitems-block-file: "plugins/MMOItems/item/block.yml"
+
+# Generar solo al cargar chunks nuevos.
+generate-on-new-chunks: true
+
+# Marca chunks para no generar dos veces con /mdvheadores generate.
+mark-generated-chunks: true
+
+# Comando base para el drop. Se puede cambiar por cada mineral.
+# Variables disponibles: %player%, %world%, %x%, %y%, %z%, %ore%
+default-drop-command: "mi give MATERIAL %drop_id% %player% 1"
+
+ores:
+  viridita:
+    enabled: true
+
+    # ID del bloque dentro de plugins/MMOItems/item/block.yml
+    # En tu caso: VETACRISTALVE
+    mmoitems-block-id: "VETACRISTALVE"
+
+    # ID del material de MMOItems que se entregará al romper la cabeza.
+    # En tu caso: CRISTALVERDE
+    drop-id: "CRISTALVERDE"
+    drop-type: "MATERIAL"
+
+    # Usa skull-texture.value y name desde el bloque de MMOItems.
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    replace:
+      - STONE
+      - DEEPSLATE
+
+    min-y: -48
+    max-y: 48
+
+    # 0.21 = 21% de chunks nuevos tienen intento de veta.
+    chunk-chance: 0.21
+
+    # Vetas chicas.
+    veins-per-chunk: 1
+    vein-min: 1
+    vein-max: 2
+
+    # FLOOR_HEAD reemplaza piedra por una cabeza puesta en el suelo.
+    # Es lo más cercano a "reemplazar stone por una cabeza".
+    placement: FLOOR_HEAD
+
+    prevent-vanilla-drops: true
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"

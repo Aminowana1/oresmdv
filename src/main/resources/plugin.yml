@@ -1,0 +1,17 @@
+name: MDVHeadOres
+version: 1.0.0
+main: com.mdvcraft.headores.MDVHeadOresPlugin
+api-version: '1.21'
+author: MDVCraft
+softdepend:
+  - MMOItems
+commands:
+  mdvheadores:
+    description: Comandos de MDVHeadOres.
+    usage: /mdvheadores <reload|generate>
+    aliases:
+      - mdvho
+permissions:
+  mdvheadores.admin:
+    description: Permite administrar MDVHeadOres.
+    default: op
