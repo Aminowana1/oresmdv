@@ -1,6 +1,7 @@
 package com.mdvcraft.headores;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -17,11 +18,14 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +33,9 @@ import org.bukkit.profile.PlayerProfile;
 import org.bukkit.profile.PlayerTextures;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +56,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
     private final Random random = new Random();
     private final Map<String, OreDefinition> ores = new HashMap<>();
+    private final Pattern powerLorePattern = Pattern.compile("(?i)(poder\\s+de\\s+pico|pickaxe\\s+power|pickaxe-power).*?([+-]?\\d+(?:[\\.,]\\d+)?)");
 
     private NamespacedKey oreKey;
     private NamespacedKey blockIdKey;
@@ -59,7 +67,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private boolean debug;
     private boolean generateOnNewChunks;
     private boolean markGeneratedChunks;
-    private String defaultDropCommand;
+    private boolean vanillaPickaxesHavePower;
+    private String defaultFallbackCommand;
+    private String noPowerMessage;
 
     @Override
     public void onEnable() {
@@ -83,7 +93,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         debug = cfg.getBoolean("debug", false);
         generateOnNewChunks = cfg.getBoolean("generate-on-new-chunks", true);
         markGeneratedChunks = cfg.getBoolean("mark-generated-chunks", true);
-        defaultDropCommand = cfg.getString("default-drop-command", "mi give MATERIAL %drop_id% %player% 1");
+        vanillaPickaxesHavePower = cfg.getBoolean("vanilla-pickaxes-have-power", true);
+        defaultFallbackCommand = cfg.getString("default-fallback-command", "mi give %drop_type% %drop_id% %player% %amount%");
+        noPowerMessage = cfg.getString("no-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
 
         ores.clear();
 
@@ -158,12 +170,17 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             ore.placement = sec.getString("placement", "FLOOR_HEAD").toUpperCase(Locale.ROOT);
             ore.dropType = sec.getString("drop-type", "MATERIAL");
             ore.dropId = sec.getString("drop-id", "");
+            ore.dropAmount = Math.max(1, sec.getInt("drop-amount", 1));
             ore.preventVanillaDrops = sec.getBoolean("prevent-vanilla-drops", true);
+            ore.ignoreSilkTouch = sec.getBoolean("ignore-silk-touch", true);
+            ore.dropNaturally = sec.getBoolean("drop-naturally", true);
+            ore.requiredPickaxePower = Math.max(0, sec.getDouble("required-pickaxe-power", 0));
             ore.breakSound = sec.getString("break-sound", "");
-            ore.dropCommand = sec.getString("drop-command", null);
+            ore.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
+            ore.fallbackCommand = sec.getString("fallback-command", null);
 
             ores.put(key, ore);
-            if (debug) getLogger().info("Veta cargada: " + key + " -> " + miBlockId + " drop " + ore.dropType + ":" + ore.dropId);
+            if (debug) getLogger().info("Veta cargada: " + key + " -> " + miBlockId + " drop " + ore.dropType + ":" + ore.dropId + " poder requerido " + ore.requiredPickaxePower);
         }
     }
 
@@ -195,14 +212,46 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        if (ore.preventVanillaDrops) {
+        Player player = event.getPlayer();
+
+        if (ore.requiredPickaxePower > 0) {
+            double currentPower = getPickaxePower(player.getInventory().getItemInMainHand());
+            if (currentPower + 0.0001 < ore.requiredPickaxePower) {
+                event.setCancelled(true);
+                String msg = noPowerMessage
+                        .replace("%required%", formatNumber(ore.requiredPickaxePower))
+                        .replace("%power%", formatNumber(currentPower))
+                        .replace("%ore%", ore.key);
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&', msg));
+                playConfiguredSound(block.getLocation(), ore.failSound, 0.7f, 0.75f);
+                return;
+            }
+        }
+
+        if (ore.preventVanillaDrops || ore.ignoreSilkTouch) {
             event.setDropItems(false);
         }
 
-        Player player = event.getPlayer();
-        String command = ore.dropCommand;
+        if (ore.dropNaturally) {
+            ItemStack drop = buildMmoItemStack(ore.dropType, ore.dropId, ore.dropAmount);
+            if (drop != null && drop.getType() != Material.AIR) {
+                Location dropLoc = block.getLocation().add(0.5, 0.35, 0.5);
+                Item dropped = block.getWorld().dropItemNaturally(dropLoc, drop);
+                dropped.setPickupDelay(10);
+            } else {
+                runFallbackCommand(ore, player, block);
+            }
+        } else {
+            runFallbackCommand(ore, player, block);
+        }
+
+        playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
+    }
+
+    private void runFallbackCommand(OreDefinition ore, Player player, Block block) {
+        String command = ore.fallbackCommand;
         if (command == null || command.isBlank()) {
-            command = defaultDropCommand;
+            command = defaultFallbackCommand;
         }
 
         command = command
@@ -213,18 +262,306 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
                 .replace("%z%", Integer.toString(block.getZ()))
                 .replace("%ore%", ore.key)
                 .replace("%drop_type%", ore.dropType)
-                .replace("%drop_id%", ore.dropId);
+                .replace("%drop_id%", ore.dropId)
+                .replace("%amount%", Integer.toString(ore.dropAmount));
 
         if (command.startsWith("/")) command = command.substring(1);
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+        if (debug) getLogger().warning("No pude crear el ItemStack MMOItems para " + ore.dropType + ":" + ore.dropId + ". Usé fallback-command.");
+    }
 
-        if (ore.breakSound != null && !ore.breakSound.isBlank()) {
-            try {
-                Sound sound = Sound.valueOf(ore.breakSound.toUpperCase(Locale.ROOT));
-                block.getWorld().playSound(block.getLocation(), sound, 0.8f, 1.15f);
-            } catch (IllegalArgumentException ignored) {
-                if (debug) getLogger().warning("Sonido inválido: " + ore.breakSound);
+    private ItemStack buildMmoItemStack(String typeId, String itemId, int amount) {
+        try {
+            Class<?> mmoItemsClass = Class.forName("net.Indyuce.mmoitems.MMOItems");
+            Object plugin = getStaticField(mmoItemsClass, "plugin");
+            if (plugin == null) return null;
+
+            Class<?> typeClass = Class.forName("net.Indyuce.mmoitems.api.Type");
+            Object type = getMmoItemsType(typeClass, typeId);
+            if (type == null) {
+                if (debug) getLogger().warning("Tipo MMOItems no encontrado: " + typeId);
+                return null;
             }
+
+            ItemStack direct = tryInvokeItemStack(plugin, "getItem", type, itemId);
+            if (direct != null) {
+                direct.setAmount(Math.max(1, amount));
+                return direct;
+            }
+
+            Object mmoItem = tryInvokeObject(plugin, "getMMOItem", type, itemId);
+            if (mmoItem != null) {
+                ItemStack built = buildFromMmoItemObject(mmoItem);
+                if (built != null) {
+                    built.setAmount(Math.max(1, amount));
+                    return built;
+                }
+            }
+        } catch (Throwable throwable) {
+            if (debug) getLogger().warning("Error creando item MMOItems " + typeId + ":" + itemId + " -> " + throwable.getClass().getSimpleName() + ": " + throwable.getMessage());
+        }
+        return null;
+    }
+
+    private Object getMmoItemsType(Class<?> typeClass, String typeId) {
+        try {
+            Method get = typeClass.getMethod("get", String.class);
+            return get.invoke(null, typeId);
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Method valueOf = typeClass.getMethod("valueOf", String.class);
+            return valueOf.invoke(null, typeId.toUpperCase(Locale.ROOT));
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private ItemStack tryInvokeItemStack(Object target, String methodName, Object type, String itemId) {
+        Object result = tryInvokeObject(target, methodName, type, itemId);
+        if (result instanceof ItemStack stack) return stack.clone();
+        return null;
+    }
+
+    private Object tryInvokeObject(Object target, String methodName, Object type, String itemId) {
+        for (Method method : target.getClass().getMethods()) {
+            if (!method.getName().equals(methodName)) continue;
+            if (method.getParameterCount() != 2) continue;
+            try {
+                return method.invoke(target, type, itemId);
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    private ItemStack buildFromMmoItemObject(Object mmoItem) {
+        try {
+            Method newBuilder = mmoItem.getClass().getMethod("newBuilder");
+            Object builder = newBuilder.invoke(mmoItem);
+            if (builder == null) return null;
+            Method build = builder.getClass().getMethod("build");
+            Object result = build.invoke(builder);
+            if (result instanceof ItemStack stack) return stack.clone();
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Method build = mmoItem.getClass().getMethod("build");
+            Object result = build.invoke(mmoItem);
+            if (result instanceof ItemStack stack) return stack.clone();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Object getStaticField(Class<?> clazz, String fieldName) {
+        try {
+            Field field = clazz.getField(fieldName);
+            return field.get(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private double getPickaxePower(ItemStack item) {
+        if (item == null || item.getType() == Material.AIR) return 0;
+
+        Double fromPdc = readPowerFromPersistentData(item);
+        if (fromPdc != null) return fromPdc;
+
+        Double fromNbt = readPowerFromMmoItemsNbt(item);
+        if (fromNbt != null) return fromNbt;
+
+        Double fromLore = readPowerFromLore(item);
+        if (fromLore != null) return fromLore;
+
+        if (vanillaPickaxesHavePower) {
+            return vanillaPickaxePower(item.getType());
+        }
+
+        return 0;
+    }
+
+    private Double readPowerFromPersistentData(ItemStack item) {
+        if (!item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return null;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+
+        for (NamespacedKey key : pdc.getKeys()) {
+            String raw = (key.getNamespace() + ":" + key.getKey()).toLowerCase(Locale.ROOT);
+            if (!raw.contains("pickaxe") || !raw.contains("power")) continue;
+
+            Double value = readDoubleFromPdc(pdc, key);
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private Double readDoubleFromPdc(PersistentDataContainer pdc, NamespacedKey key) {
+        try {
+            Double value = pdc.get(key, PersistentDataType.DOUBLE);
+            if (value != null) return value;
+        } catch (Throwable ignored) {
+        }
+        try {
+            Integer value = pdc.get(key, PersistentDataType.INTEGER);
+            if (value != null) return value.doubleValue();
+        } catch (Throwable ignored) {
+        }
+        try {
+            Long value = pdc.get(key, PersistentDataType.LONG);
+            if (value != null) return value.doubleValue();
+        } catch (Throwable ignored) {
+        }
+        try {
+            String value = pdc.get(key, PersistentDataType.STRING);
+            if (value != null) return Double.parseDouble(value.replace(',', '.'));
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Double readPowerFromMmoItemsNbt(ItemStack item) {
+        try {
+            Class<?> nbtClass = Class.forName("net.Indyuce.mmoitems.api.item.nbt.NBTItem");
+            Object nbtItem = createMmoNbtItem(nbtClass, item);
+            if (nbtItem == null) return null;
+
+            String[] tags = new String[] {
+                    "MMOITEMS_PICKAXE_POWER",
+                    "PICKAXE_POWER",
+                    "pickaxe-power",
+                    "pickaxe_power"
+            };
+
+            for (String tag : tags) {
+                Boolean has = tryInvokeBoolean(nbtItem, "hasTag", tag);
+                if (has != null && !has) continue;
+
+                Double value = tryInvokeDouble(nbtItem, "getDouble", tag);
+                if (value != null && value > 0) return value;
+
+                Integer intValue = tryInvokeInteger(nbtItem, "getInteger", tag);
+                if (intValue == null) intValue = tryInvokeInteger(nbtItem, "getInt", tag);
+                if (intValue != null && intValue > 0) return intValue.doubleValue();
+
+                String strValue = tryInvokeString(nbtItem, "getString", tag);
+                if (strValue != null && !strValue.isBlank()) {
+                    try {
+                        return Double.parseDouble(strValue.replace(',', '.'));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        } catch (Throwable throwable) {
+            if (debug) getLogger().warning("No pude leer NBT de MMOItems para poder de pico: " + throwable.getClass().getSimpleName());
+        }
+        return null;
+    }
+
+    private Object createMmoNbtItem(Class<?> nbtClass, ItemStack item) {
+        try {
+            Constructor<?> constructor = nbtClass.getConstructor(ItemStack.class);
+            return constructor.newInstance(item);
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Method get = nbtClass.getMethod("get", ItemStack.class);
+            return get.invoke(null, item);
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Boolean tryInvokeBoolean(Object target, String methodName, String arg) {
+        try {
+            Method method = target.getClass().getMethod(methodName, String.class);
+            Object result = method.invoke(target, arg);
+            if (result instanceof Boolean value) return value;
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Double tryInvokeDouble(Object target, String methodName, String arg) {
+        try {
+            Method method = target.getClass().getMethod(methodName, String.class);
+            Object result = method.invoke(target, arg);
+            if (result instanceof Number value) return value.doubleValue();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Integer tryInvokeInteger(Object target, String methodName, String arg) {
+        try {
+            Method method = target.getClass().getMethod(methodName, String.class);
+            Object result = method.invoke(target, arg);
+            if (result instanceof Number value) return value.intValue();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private String tryInvokeString(Object target, String methodName, String arg) {
+        try {
+            Method method = target.getClass().getMethod(methodName, String.class);
+            Object result = method.invoke(target, arg);
+            if (result != null) return result.toString();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Double readPowerFromLore(ItemStack item) {
+        if (!item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null || !meta.hasLore() || meta.getLore() == null) return null;
+
+        for (String line : meta.getLore()) {
+            String clean = ChatColor.stripColor(line);
+            if (clean == null) continue;
+            Matcher matcher = powerLorePattern.matcher(clean);
+            if (!matcher.find()) continue;
+
+            try {
+                return Double.parseDouble(matcher.group(2).replace(',', '.'));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private double vanillaPickaxePower(Material material) {
+        return switch (material) {
+            case WOODEN_PICKAXE -> 1;
+            case STONE_PICKAXE -> 2;
+            case IRON_PICKAXE -> 3;
+            case GOLDEN_PICKAXE -> 2;
+            case DIAMOND_PICKAXE -> 4;
+            case NETHERITE_PICKAXE -> 5;
+            default -> 0;
+        };
+    }
+
+    private String formatNumber(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.0001) {
+            return Integer.toString((int) Math.rint(value));
+        }
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private void playConfiguredSound(Location location, String soundName, float volume, float pitch) {
+        if (soundName == null || soundName.isBlank()) return;
+        try {
+            Sound sound = Sound.valueOf(soundName.toUpperCase(Locale.ROOT));
+            location.getWorld().playSound(location, sound, volume, pitch);
+        } catch (IllegalArgumentException ignored) {
+            if (debug) getLogger().warning("Sonido inválido: " + soundName);
         }
     }
 
@@ -451,8 +788,13 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String placement;
         String dropType;
         String dropId;
+        int dropAmount;
         boolean preventVanillaDrops;
+        boolean ignoreSilkTouch;
+        boolean dropNaturally;
+        double requiredPickaxePower;
         String breakSound;
-        String dropCommand;
+        String failSound;
+        String fallbackCommand;
     }
 }

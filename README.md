@@ -1,103 +1,56 @@
 # MDVHeadOres
 
-Plugin pequeño para MDVCraft/Purpur/Paper 1.21.6.
+Plugin para MDVCraft / Purpur 1.21.6.
 
-Hace que en chunks nuevos aparezcan vetas visuales como `PLAYER_HEAD` con textura tomada desde un bloque de MMOItems, por ejemplo `VETACRISTALVE`.
+Genera minerales como `PLAYER_HEAD` reales usando la textura tomada desde MMOItems.
 
-Cuando el jugador rompe esa cabeza, el plugin cancela el drop vanilla y ejecuta un comando de MMOItems para dar el material configurado, por ejemplo `CRISTALVERDE`.
+## v1.0.2
 
-## Por qué no usa customblocks de MMOItems
+Cambios principales:
 
-Los custom blocks de MMOItems se ven como mushroom/callampa sin resource pack. Este plugin no usa esos bloques colocados: coloca una cabeza vanilla real con la textura del `skull-texture.value` del bloque de MMOItems.
-
-## Instalación
-
-1. Compilar el plugin con Maven:
-
-```bash
-mvn package
-```
-
-2. Copiar el jar generado:
-
-```txt
-target/MDVHeadOres-1.0.0.jar
-```
-
-a:
-
-```txt
-/plugins/MDVHeadOres-1.0.0.jar
-```
-
-3. Reiniciar el servidor.
-
-4. Editar:
-
-```txt
-/plugins/MDVHeadOres/config.yml
-```
-
-5. Usar:
-
-```txt
-/mdvheadores reload
-```
-
-## Config para Viridita
-
-Ya viene preparada para:
-
-```txt
-Bloque MMOItems: VETACRISTALVE
-Drop MMOItems: CRISTALVERDE
-```
-
-El plugin lee la textura desde:
-
-```txt
-/plugins/MMOItems/item/block.yml
-```
-
-Busca:
-
-```yml
-VETACRISTALVE:
-  base:
-    skull-texture:
-      value: ...
-```
+- Al romper la veta, el item de MMOItems se dropea físicamente en el mundo.
+- Silk Touch no afecta la veta: siempre dropea el item configurado, no la cabeza.
+- Cada veta puede requerir poder mínimo de pico con `required-pickaxe-power`.
+- El plugin intenta leer el poder de pico desde MMOItems (`pickaxe-power` / `MMOITEMS_PICKAXE_POWER`).
+- También puede leer el poder desde el lore si aparece como `Poder de pico: X`.
+- Los picos vanilla pueden tener poder básico si `vanilla-pickaxes-have-power: true`.
 
 ## Comandos
 
 ```txt
 /mdvheadores reload
+/mdvheadores generate <radio> [force]
 ```
 
-Recarga la config.
+Ejemplo de prueba:
 
 ```txt
-/mdvheadores generate 4
-```
-
-Genera vetas en chunks cargados alrededor del jugador en radio 4 chunks. Respeta la probabilidad y evita chunks ya marcados.
-
-```txt
+/mdvheadores reload
 /mdvheadores generate 4 force
 ```
 
-Prueba fuerte: ignora la marca del chunk y la probabilidad. Úsalo solo para test.
+## Config principal
 
-## Permiso
-
-```txt
-mdvheadores.admin
+```yml
+required-pickaxe-power: 1
+drop-naturally: true
+ignore-silk-touch: true
 ```
 
-## Nota importante
+El drop se construye usando MMOItems por reflexión. Si por algún motivo no se puede construir el item, se usa `default-fallback-command` como respaldo.
 
-Esto no hace que MMOItems customblocks maneje el drop directamente, porque la veta colocada es una `PLAYER_HEAD` vanilla, no un customblock de MMOItems. El item sí lo entrega MMOItems mediante comando:
+## Compilar con GitHub Actions
+
+Este proyecto incluye:
 
 ```txt
-mi give MATERIAL CRISTALVERDE <jugador> 1
+.github/workflows/build.yml
 ```
+
+Pasos:
+
+1. Sube el contenido del ZIP a la raíz del repositorio.
+2. Entra a `Actions`.
+3. Ejecuta `Build MDVHeadOres`.
+4. Descarga el artifact `MDVHeadOres-jar`.
+5. Sube el `.jar` a `/plugins/`.

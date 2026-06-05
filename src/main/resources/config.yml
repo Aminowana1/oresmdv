@@ -1,6 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# El item dropeado se entrega con un comando de MMOItems.
+# v1.0.2: el mineral ahora se dropea en el mundo, ignora Silk Touch y puede requerir poder de pico.
 
 debug: true
 
@@ -13,9 +13,17 @@ generate-on-new-chunks: true
 # Marca chunks para no generar dos veces con /mdvheadores generate.
 mark-generated-chunks: true
 
-# Comando base para el drop. Se puede cambiar por cada mineral.
-# Variables disponibles: %player%, %world%, %x%, %y%, %z%, %ore%
-default-drop-command: "mi give MATERIAL %drop_id% %player% 1"
+# Si está true, los picos vanilla tienen poder básico:
+# madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
+vanilla-pickaxes-have-power: true
+
+# Fallback si por algún motivo el plugin no logra construir el item de MMOItems para dropearlo.
+# Normalmente NO se usa. Solo queda como seguridad.
+# Variables: %player%, %world%, %x%, %y%, %z%, %ore%, %drop_type%, %drop_id%, %amount%
+default-fallback-command: "mi give %drop_type% %drop_id% %player% %amount%"
+
+# Mensaje si el pico no tiene poder suficiente.
+no-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."
 
 ores:
   viridita:
@@ -25,10 +33,11 @@ ores:
     # En tu caso: VETACRISTALVE
     mmoitems-block-id: "VETACRISTALVE"
 
-    # ID del material de MMOItems que se entregará al romper la cabeza.
+    # Item de MMOItems que se dropea en el mundo al romper la cabeza.
     # En tu caso: CRISTALVERDE
     drop-id: "CRISTALVERDE"
     drop-type: "MATERIAL"
+    drop-amount: 1
 
     # Usa skull-texture.value y name desde el bloque de MMOItems.
     texture-from-mmoitems: true
@@ -53,8 +62,22 @@ ores:
     vein-max: 2
 
     # FLOOR_HEAD reemplaza piedra por una cabeza puesta en el suelo.
-    # Es lo más cercano a "reemplazar stone por una cabeza".
     placement: FLOOR_HEAD
 
+    # Evita que Minecraft dropee la cabeza vanilla.
     prevent-vanilla-drops: true
+
+    # Si el pico tiene Silk Touch, se ignora: igual dropea CRISTALVERDE.
+    ignore-silk-touch: true
+
+    # true = dropea el MMOItem físicamente en el suelo.
+    # false = usa fallback-command y lo entrega por comando.
+    drop-naturally: true
+
+    # Poder mínimo de pico requerido.
+    # MMOItems: usa la stat pickaxe-power / Poder de pico.
+    # Vanilla: madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
+    required-pickaxe-power: 1
+
     break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
