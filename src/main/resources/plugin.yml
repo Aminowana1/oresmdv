@@ -1,10 +1,11 @@
 name: MDVHeadOres
-version: 1.0.4
+version: 1.0.5
 main: com.mdvcraft.headores.MDVHeadOresPlugin
 api-version: '1.21'
 author: MDVCraft
 softdepend:
   - MMOItems
+  - MMOCore
 commands:
   mdvheadores:
     description: Comandos de MDVHeadOres.

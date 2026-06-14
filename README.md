@@ -111,3 +111,39 @@ tree-nodes:
     break-sound: "BLOCK_WOOD_BREAK"
     fail-sound: "BLOCK_NOTE_BLOCK_BASS"
 ```
+
+
+## XP de MMOCore por vetas/nodos custom
+
+Desde la versión 1.0.5 cada ore o tree-node puede dar experiencia de MMOCore a una profesión y/o al nivel principal.
+
+Config global:
+
+```yml
+mmocore-exp-command: "mmocore admin exp give %player% %target% %amount% %split%"
+```
+
+Ejemplo para minerales custom:
+
+```yml
+mmocore-xp:
+  enabled: true
+  profession-id: "mining"
+  profession-amount: "3-6"
+  main-amount: "0"
+  split: false
+```
+
+Ejemplo para nodos de árbol:
+
+```yml
+mmocore-xp:
+  enabled: true
+  profession-id: "woodcutting"
+  profession-amount: "3-6"
+  main-amount: "0"
+  split: false
+```
+
+`profession-id` debe coincidir con el nombre del archivo de profesión de MMOCore: `mining.yml` -> `mining`, `woodcutting.yml` -> `woodcutting`.
+Para dar XP al nivel principal, usa `main-amount`, por ejemplo `main-amount: "1-2"`.

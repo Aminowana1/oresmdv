@@ -26,6 +26,11 @@ vanilla-axes-have-power: true
 # Variables: %player%, %world%, %x%, %y%, %z%, %ore%, %drop_type%, %drop_id%, %amount%
 default-fallback-command: "mi give %drop_type% %drop_id% %player% %amount%"
 
+# Comando usado para dar XP de MMOCore cuando se rompe una veta/nodo custom.
+# Variables: %player%, %target%, %profession%, %amount%, %split%, %source%
+# %target% puede ser una profesión como mining/woodcutting o "main" para nivel principal.
+mmocore-exp-command: "mmocore admin exp give %player% %target% %amount% %split%"
+
 # Mensaje si el pico no tiene poder suficiente.
 no-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."
 
@@ -98,6 +103,16 @@ ores:
     # Vanilla: madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
     required-pickaxe-power: 1
 
+    # XP opcional para MMOCore al romper esta veta custom.
+    # profession-id debe coincidir con el archivo de profesión: mining.yml -> mining.
+    # main-amount da XP al nivel principal; déjalo en 0 si no quieres.
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "3-6"
+      main-amount: "0"
+      split: false
+
     break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
     fail-sound: "BLOCK_NOTE_BLOCK_BASS"
 
@@ -145,6 +160,16 @@ tree-nodes:
 
     # Requiere hacha/item con Poder de Hacha.
     required-axe-power: 2
+
+    # XP opcional para MMOCore al romper este nodo custom.
+    # profession-id debe coincidir con el archivo de profesión: woodcutting.yml -> woodcutting.
+    # main-amount da XP al nivel principal; déjalo en 0 si no quieres.
+    mmocore-xp:
+      enabled: true
+      profession-id: "woodcutting"
+      profession-amount: "3-6"
+      main-amount: "0"
+      split: false
 
     # Si está true, intenta colocarlo en troncos con aire alrededor, más visible como retoño/ramita.
     only-on-surface-logs: true

@@ -75,6 +75,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private boolean vanillaPickaxesHavePower;
     private boolean vanillaAxesHavePower;
     private String defaultFallbackCommand;
+    private String mmocoreExpCommandTemplate;
     private String noPowerMessage;
     private String noAxePowerMessage;
 
@@ -104,6 +105,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         vanillaPickaxesHavePower = cfg.getBoolean("vanilla-pickaxes-have-power", true);
         vanillaAxesHavePower = cfg.getBoolean("vanilla-axes-have-power", true);
         defaultFallbackCommand = cfg.getString("default-fallback-command", "mi give %drop_type% %drop_id% %player% %amount%");
+        mmocoreExpCommandTemplate = cfg.getString("mmocore-exp-command", "mmocore admin exp give %player% %target% %amount% %split%");
         noPowerMessage = cfg.getString("no-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
         noAxePowerMessage = cfg.getString("no-axe-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
 
@@ -189,6 +191,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             ore.breakSound = sec.getString("break-sound", "");
             ore.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
             ore.fallbackCommand = sec.getString("fallback-command", null);
+            loadMmoCoreXpSettings(sec, ore.mmocoreXp, "mining");
 
             ore.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
             ore.avoidNearMaterials = new HashSet<>();
@@ -282,6 +285,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             node.breakSound = sec.getString("break-sound", "BLOCK_WOOD_BREAK");
             node.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
             node.fallbackCommand = sec.getString("fallback-command", null);
+            loadMmoCoreXpSettings(sec, node.mmocoreXp, "woodcutting");
             node.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
             node.onlyOnSurfaceLogs = sec.getBoolean("only-on-surface-logs", true);
 
@@ -359,6 +363,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         }
 
         playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
+        giveMmoCoreXp(player, ore.mmocoreXp, ore.key);
     }
 
     private void handleTreeNodeBreak(BlockBreakEvent event, String nodeName) {
@@ -404,6 +409,85 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         }
 
         playConfiguredSound(block.getLocation(), node.breakSound, 0.8f, 1.05f);
+        giveMmoCoreXp(player, node.mmocoreXp, node.key);
+    }
+
+
+    private void loadMmoCoreXpSettings(ConfigurationSection parent, MmoCoreXpSettings xp, String defaultProfession) {
+        ConfigurationSection sec = parent.getConfigurationSection("mmocore-xp");
+        if (sec == null) return;
+
+        xp.enabled = sec.getBoolean("enabled", false);
+        xp.professionId = sec.getString("profession-id", sec.getString("profession", defaultProfession));
+        xp.professionXp = parseIntRange(sec.getString("profession-amount", sec.getString("amount", "0")));
+        xp.mainXp = parseIntRange(sec.getString("main-amount", "0"));
+        xp.split = sec.getBoolean("split", false);
+    }
+
+    private IntRange parseIntRange(String raw) {
+        if (raw == null || raw.isBlank()) return new IntRange(0, 0);
+        raw = raw.trim();
+
+        try {
+            if (raw.contains("-")) {
+                String[] split = raw.split("-", 2);
+                int min = Math.max(0, Integer.parseInt(split[0].trim()));
+                int max = Math.max(min, Integer.parseInt(split[1].trim()));
+                return new IntRange(min, max);
+            }
+
+            int value = Math.max(0, Integer.parseInt(raw));
+            return new IntRange(value, value);
+        } catch (NumberFormatException exception) {
+            if (debug) getLogger().warning("Rango de XP inválido: " + raw + ". Usaré 0.");
+            return new IntRange(0, 0);
+        }
+    }
+
+    private int rollIntRange(IntRange range) {
+        if (range == null || range.max <= range.min) return range == null ? 0 : range.min;
+        return range.min + random.nextInt(range.max - range.min + 1);
+    }
+
+    private void giveMmoCoreXp(Player player, MmoCoreXpSettings xp, String sourceKey) {
+        if (player == null || xp == null || !xp.enabled) return;
+
+        if (!Bukkit.getPluginManager().isPluginEnabled("MMOCore")) {
+            if (debug) getLogger().warning("No pude dar XP MMOCore por '" + sourceKey + "' porque MMOCore no está activo.");
+            return;
+        }
+
+        int professionAmount = rollIntRange(xp.professionXp);
+        if (professionAmount > 0 && xp.professionId != null && !xp.professionId.isBlank()) {
+            dispatchMmoCoreExpCommand(player, xp.professionId, professionAmount, xp.split, sourceKey);
+        }
+
+        int mainAmount = rollIntRange(xp.mainXp);
+        if (mainAmount > 0) {
+            dispatchMmoCoreExpCommand(player, "main", mainAmount, xp.split, sourceKey);
+        }
+    }
+
+    private void dispatchMmoCoreExpCommand(Player player, String target, int amount, boolean split, String sourceKey) {
+        String command = mmocoreExpCommandTemplate;
+        if (command == null || command.isBlank()) {
+            command = "mmocore admin exp give %player% %target% %amount% %split%";
+        }
+
+        command = command
+                .replace("%player%", player.getName())
+                .replace("%target%", target)
+                .replace("%profession%", target)
+                .replace("%amount%", Integer.toString(amount))
+                .replace("%split%", Boolean.toString(split))
+                .replace("%source%", sourceKey == null ? "" : sourceKey);
+
+        if (command.startsWith("/")) command = command.substring(1);
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+
+        if (debug) {
+            getLogger().info("XP MMOCore: " + player.getName() + " +" + amount + " en '" + target + "' por '" + sourceKey + "'.");
+        }
     }
 
     private void runFallbackCommand(OreDefinition ore, Player player, Block block) {
@@ -1241,6 +1325,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String fallbackCommand;
         boolean applyPhysicsOnPlace;
         boolean onlyOnSurfaceLogs;
+        MmoCoreXpSettings mmocoreXp = new MmoCoreXpSettings();
     }
 
     private static final class OreDefinition {
@@ -1269,5 +1354,24 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String fallbackCommand;
         boolean applyPhysicsOnPlace;
         Set<Material> avoidNearMaterials;
+        MmoCoreXpSettings mmocoreXp = new MmoCoreXpSettings();
+    }
+
+    private static final class MmoCoreXpSettings {
+        boolean enabled;
+        String professionId;
+        IntRange professionXp = new IntRange(0, 0);
+        IntRange mainXp = new IntRange(0, 0);
+        boolean split;
+    }
+
+    private static final class IntRange {
+        final int min;
+        final int max;
+
+        IntRange(int min, int max) {
+            this.min = min;
+            this.max = max;
+        }
     }
 }
