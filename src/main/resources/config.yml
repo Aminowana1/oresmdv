@@ -2,7 +2,7 @@
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
 # v1.0.3: evita colocar cabezas pegadas a minerales vanilla y aplica actualizaciones físicas al colocar.
 
-debug: true
+debug: false
 
 # Ruta al archivo de bloques de MMOItems, relativa a la carpeta raíz del servidor.
 mmoitems-block-file: "plugins/MMOItems/item/block.yml"
@@ -12,6 +12,26 @@ generate-on-new-chunks: true
 
 # Marca chunks para no generar dos veces con /mdvheadores generate.
 mark-generated-chunks: true
+
+
+# Modo optimizado para exploración en vivo.
+# En vez de generar minerales custom inmediatamente al cargar el chunk,
+# los pone en una cola y procesa pocos chunks cada intervalo.
+# Esto evita tirones fuertes cuando varios jugadores exploran o usan /rtp.
+generation-throttle:
+  enabled: true
+  # Espera antes de procesar un chunk nuevo. Ayuda a que la generación vanilla termine primero.
+  delay-after-chunk-load-ticks: 40
+  # Cada cuántos ticks procesa la cola. 4 ticks = 0.2s aprox.
+  interval-ticks: 4
+  # Chunks procesados por intervalo. Para server público, 1 es lo más seguro.
+  chunks-per-interval: 1
+  # Cola máxima. Si 40 jugadores exploran a la vez, conviene dejarla alta.
+  max-queue-size: 10000
+  # Si la cola está llena, omite chunks nuevos en vez de congelar el servidor.
+  skip-if-queue-full: true
+  # /mdvheadores generate también usa la cola para no pegar tirones.
+  command-generate-uses-queue: true
 
 # Si está true, los picos vanilla tienen poder básico:
 # madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.

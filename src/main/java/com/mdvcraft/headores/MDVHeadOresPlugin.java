@@ -31,6 +31,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.profile.PlayerProfile;
 import org.bukkit.profile.PlayerTextures;
 
@@ -41,11 +42,13 @@ import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Deque;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
@@ -59,6 +62,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private final Random random = new Random();
     private final Map<String, OreDefinition> ores = new HashMap<>();
     private final Map<String, TreeNodeDefinition> treeNodes = new HashMap<>();
+    private final Deque<PendingChunk> generationQueue = new ArrayDeque<>();
+    private final Set<String> queuedChunkKeys = new HashSet<>();
+    private final Map<String, PlayerProfile> profileCache = new HashMap<>();
     private final Pattern powerLorePattern = Pattern.compile("(?i)(poder\\s+de\\s+pico|pickaxe\\s+power|pickaxe-power).*?([+-]?\\d+(?:[\\.,]\\d+)?)");
     private final Pattern axePowerLorePattern = Pattern.compile("(?i)(poder\\s+de\\s+hacha|axe\\s+power|axe-power).*?([+-]?\\d+(?:[\\.,]\\d+)?)");
 
@@ -79,6 +85,15 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private String noPowerMessage;
     private String noAxePowerMessage;
 
+    private boolean generationThrottleEnabled;
+    private int generationIntervalTicks;
+    private int generationChunksPerInterval;
+    private int generationDelayTicks;
+    private int generationMaxQueueSize;
+    private boolean generationSkipIfQueueFull;
+    private boolean commandGenerateUsesQueue;
+    private BukkitTask generationTask;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -91,8 +106,20 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         generatedChunkKey = new NamespacedKey(this, "generated_chunk");
 
         loadSettings();
+        restartGenerationTask();
         Bukkit.getPluginManager().registerEvents(this, this);
         getLogger().info("MDVHeadOres activado. Vetas cargadas: " + ores.size() + ", nodos de árbol cargados: " + treeNodes.size());
+    }
+
+    @Override
+    public void onDisable() {
+        if (generationTask != null) {
+            generationTask.cancel();
+            generationTask = null;
+        }
+        generationQueue.clear();
+        queuedChunkKeys.clear();
+        profileCache.clear();
     }
 
     private void loadSettings() {
@@ -106,11 +133,20 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         vanillaAxesHavePower = cfg.getBoolean("vanilla-axes-have-power", true);
         defaultFallbackCommand = cfg.getString("default-fallback-command", "mi give %drop_type% %drop_id% %player% %amount%");
         mmocoreExpCommandTemplate = cfg.getString("mmocore-exp-command", "mmocore admin exp give %player% %target% %amount% %split%");
+
+        generationThrottleEnabled = cfg.getBoolean("generation-throttle.enabled", true);
+        generationIntervalTicks = Math.max(1, cfg.getInt("generation-throttle.interval-ticks", 4));
+        generationChunksPerInterval = Math.max(1, cfg.getInt("generation-throttle.chunks-per-interval", 1));
+        generationDelayTicks = Math.max(0, cfg.getInt("generation-throttle.delay-after-chunk-load-ticks", 40));
+        generationMaxQueueSize = Math.max(64, cfg.getInt("generation-throttle.max-queue-size", 10000));
+        generationSkipIfQueueFull = cfg.getBoolean("generation-throttle.skip-if-queue-full", true);
+        commandGenerateUsesQueue = cfg.getBoolean("generation-throttle.command-generate-uses-queue", true);
         noPowerMessage = cfg.getString("no-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
         noAxePowerMessage = cfg.getString("no-axe-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
 
         ores.clear();
         treeNodes.clear();
+        profileCache.clear();
 
         File miBlockFile = new File(getServer().getWorldContainer(), cfg.getString("mmoitems-block-file", "plugins/MMOItems/item/block.yml"));
         YamlConfiguration mmoBlocks = YamlConfiguration.loadConfiguration(miBlockFile);
@@ -191,7 +227,8 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             ore.breakSound = sec.getString("break-sound", "");
             ore.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
             ore.fallbackCommand = sec.getString("fallback-command", null);
-            loadMmoCoreXpSettings(sec, ore.mmocoreXp, "mining");
+            ore.mmocoreXp = new MmoCoreXpSettings();
+            loadMmoCoreXpSettings(sec.getConfigurationSection("mmocore-xp"), ore.mmocoreXp, key);
 
             ore.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
             ore.avoidNearMaterials = new HashSet<>();
@@ -285,7 +322,8 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             node.breakSound = sec.getString("break-sound", "BLOCK_WOOD_BREAK");
             node.failSound = sec.getString("fail-sound", "BLOCK_NOTE_BLOCK_BASS");
             node.fallbackCommand = sec.getString("fallback-command", null);
-            loadMmoCoreXpSettings(sec, node.mmocoreXp, "woodcutting");
+            node.mmocoreXp = new MmoCoreXpSettings();
+            loadMmoCoreXpSettings(sec.getConfigurationSection("mmocore-xp"), node.mmocoreXp, key);
             node.applyPhysicsOnPlace = sec.getBoolean("apply-physics-on-place", true);
             node.onlyOnSurfaceLogs = sec.getBoolean("only-on-surface-logs", true);
 
@@ -299,7 +337,87 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         if (!generateOnNewChunks || !event.isNewChunk()) return;
         Chunk chunk = event.getChunk();
 
-        Bukkit.getScheduler().runTask(this, () -> generateInChunk(chunk, false, false));
+        if (generationThrottleEnabled) {
+            enqueueChunk(chunk, false, false);
+        } else {
+            Bukkit.getScheduler().runTask(this, () -> generateInChunk(chunk, false, false));
+        }
+    }
+
+    private void restartGenerationTask() {
+        if (generationTask != null) {
+            generationTask.cancel();
+            generationTask = null;
+        }
+
+        if (!generationThrottleEnabled) return;
+
+        generationTask = Bukkit.getScheduler().runTaskTimer(this, this::processGenerationQueue, 20L, Math.max(1L, generationIntervalTicks));
+    }
+
+    private boolean enqueueChunk(Chunk chunk, boolean force, boolean fromCommand) {
+        if (chunk == null) return false;
+
+        if (markGeneratedChunks && !force) {
+            String marked = chunk.getPersistentDataContainer().get(generatedChunkKey, PersistentDataType.STRING);
+            if (marked != null) return false;
+        }
+
+        String key = chunkQueueKey(chunk.getWorld(), chunk.getX(), chunk.getZ());
+        if (queuedChunkKeys.contains(key)) return false;
+
+        if (generationQueue.size() >= generationMaxQueueSize && generationSkipIfQueueFull) {
+            if (debug) getLogger().warning("Cola de generación llena. Chunk omitido: " + chunk.getWorld().getName() + " " + chunk.getX() + "," + chunk.getZ());
+            return false;
+        }
+
+        PendingChunk pending = new PendingChunk();
+        pending.worldId = chunk.getWorld().getUID();
+        pending.worldName = chunk.getWorld().getName();
+        pending.x = chunk.getX();
+        pending.z = chunk.getZ();
+        pending.force = force;
+        pending.fromCommand = fromCommand;
+        pending.readyAtMillis = System.currentTimeMillis() + (generationDelayTicks * 50L);
+
+        generationQueue.addLast(pending);
+        queuedChunkKeys.add(key);
+        return true;
+    }
+
+    private String chunkQueueKey(World world, int x, int z) {
+        return world.getUID() + ":" + x + ":" + z;
+    }
+
+    private void processGenerationQueue() {
+        if (generationQueue.isEmpty()) return;
+
+        long now = System.currentTimeMillis();
+        int processed = 0;
+
+        while (processed < generationChunksPerInterval && !generationQueue.isEmpty()) {
+            PendingChunk pending = generationQueue.peekFirst();
+            if (pending == null) return;
+            if (pending.readyAtMillis > now) return;
+
+            generationQueue.removeFirst();
+            World world = Bukkit.getWorld(pending.worldId);
+            if (world == null) {
+                queuedChunkKeys.remove(pending.worldId + ":" + pending.x + ":" + pending.z);
+                continue;
+            }
+
+            queuedChunkKeys.remove(chunkQueueKey(world, pending.x, pending.z));
+
+            if (!world.isChunkLoaded(pending.x, pending.z)) {
+                if (debug) getLogger().info("Chunk omitido porque ya no está cargado: " + pending.worldName + " " + pending.x + "," + pending.z);
+                continue;
+            }
+
+            Chunk chunk = world.getChunkAt(pending.x, pending.z);
+            generateInChunk(chunk, pending.force, pending.fromCommand);
+            processed++;
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -362,8 +480,8 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             runFallbackCommand(ore, player, block);
         }
 
-        playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
         giveMmoCoreXp(player, ore.mmocoreXp, ore.key);
+        playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
     }
 
     private void handleTreeNodeBreak(BlockBreakEvent event, String nodeName) {
@@ -408,71 +526,72 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             runFallbackCommand(node, player, block);
         }
 
-        playConfiguredSound(block.getLocation(), node.breakSound, 0.8f, 1.05f);
         giveMmoCoreXp(player, node.mmocoreXp, node.key);
+        playConfiguredSound(block.getLocation(), node.breakSound, 0.8f, 1.05f);
     }
 
+    private void loadMmoCoreXpSettings(ConfigurationSection sec, MmoCoreXpSettings settings, String ownerKey) {
+        if (settings == null) return;
+        if (sec == null) {
+            settings.enabled = false;
+            settings.professionId = "";
+            settings.professionAmount = new IntRange(0, 0);
+            settings.mainAmount = new IntRange(0, 0);
+            settings.split = false;
+            return;
+        }
 
-    private void loadMmoCoreXpSettings(ConfigurationSection parent, MmoCoreXpSettings xp, String defaultProfession) {
-        ConfigurationSection sec = parent.getConfigurationSection("mmocore-xp");
-        if (sec == null) return;
+        settings.enabled = sec.getBoolean("enabled", false);
+        settings.professionId = sec.getString("profession-id", "");
+        settings.professionAmount = parseIntRange(sec.getString("profession-amount", "0"));
+        settings.mainAmount = parseIntRange(sec.getString("main-amount", "0"));
+        settings.split = sec.getBoolean("split", false);
 
-        xp.enabled = sec.getBoolean("enabled", false);
-        xp.professionId = sec.getString("profession-id", sec.getString("profession", defaultProfession));
-        xp.professionXp = parseIntRange(sec.getString("profession-amount", sec.getString("amount", "0")));
-        xp.mainXp = parseIntRange(sec.getString("main-amount", "0"));
-        xp.split = sec.getBoolean("split", false);
+        if (settings.enabled && debug) {
+            getLogger().info("XP MMOCore cargada para " + ownerKey + ": prof=" + settings.professionId + " " + settings.professionAmount.min + "-" + settings.professionAmount.max + ", main=" + settings.mainAmount.min + "-" + settings.mainAmount.max);
+        }
     }
 
     private IntRange parseIntRange(String raw) {
         if (raw == null || raw.isBlank()) return new IntRange(0, 0);
         raw = raw.trim();
-
         try {
             if (raw.contains("-")) {
-                String[] split = raw.split("-", 2);
-                int min = Math.max(0, Integer.parseInt(split[0].trim()));
-                int max = Math.max(min, Integer.parseInt(split[1].trim()));
-                return new IntRange(min, max);
+                String[] parts = raw.split("-", 2);
+                int a = Integer.parseInt(parts[0].trim());
+                int b = Integer.parseInt(parts[1].trim());
+                return new IntRange(Math.min(a, b), Math.max(a, b));
             }
-
-            int value = Math.max(0, Integer.parseInt(raw));
+            int value = Integer.parseInt(raw);
             return new IntRange(value, value);
         } catch (NumberFormatException exception) {
-            if (debug) getLogger().warning("Rango de XP inválido: " + raw + ". Usaré 0.");
             return new IntRange(0, 0);
         }
     }
 
     private int rollIntRange(IntRange range) {
-        if (range == null || range.max <= range.min) return range == null ? 0 : range.min;
-        return range.min + random.nextInt(range.max - range.min + 1);
+        if (range == null) return 0;
+        if (range.max <= range.min) return Math.max(0, range.min);
+        return Math.max(0, range.min + random.nextInt(range.max - range.min + 1));
     }
 
-    private void giveMmoCoreXp(Player player, MmoCoreXpSettings xp, String sourceKey) {
-        if (player == null || xp == null || !xp.enabled) return;
+    private void giveMmoCoreXp(Player player, MmoCoreXpSettings settings, String source) {
+        if (player == null || settings == null || !settings.enabled) return;
 
-        if (!Bukkit.getPluginManager().isPluginEnabled("MMOCore")) {
-            if (debug) getLogger().warning("No pude dar XP MMOCore por '" + sourceKey + "' porque MMOCore no está activo.");
-            return;
+        int professionAmount = rollIntRange(settings.professionAmount);
+        if (professionAmount > 0 && settings.professionId != null && !settings.professionId.isBlank()) {
+            dispatchMmoCoreExpCommand(player, settings.professionId, professionAmount, settings.split, source);
         }
 
-        int professionAmount = rollIntRange(xp.professionXp);
-        if (professionAmount > 0 && xp.professionId != null && !xp.professionId.isBlank()) {
-            dispatchMmoCoreExpCommand(player, xp.professionId, professionAmount, xp.split, sourceKey);
-        }
-
-        int mainAmount = rollIntRange(xp.mainXp);
+        int mainAmount = rollIntRange(settings.mainAmount);
         if (mainAmount > 0) {
-            dispatchMmoCoreExpCommand(player, "main", mainAmount, xp.split, sourceKey);
+            dispatchMmoCoreExpCommand(player, "main", mainAmount, settings.split, source);
         }
     }
 
-    private void dispatchMmoCoreExpCommand(Player player, String target, int amount, boolean split, String sourceKey) {
+    private void dispatchMmoCoreExpCommand(Player player, String target, int amount, boolean split, String source) {
         String command = mmocoreExpCommandTemplate;
-        if (command == null || command.isBlank()) {
-            command = "mmocore admin exp give %player% %target% %amount% %split%";
-        }
+        if (command == null || command.isBlank()) return;
 
         command = command
                 .replace("%player%", player.getName())
@@ -480,14 +599,10 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
                 .replace("%profession%", target)
                 .replace("%amount%", Integer.toString(amount))
                 .replace("%split%", Boolean.toString(split))
-                .replace("%source%", sourceKey == null ? "" : sourceKey);
+                .replace("%source%", source == null ? "" : source);
 
         if (command.startsWith("/")) command = command.substring(1);
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-
-        if (debug) {
-            getLogger().info("XP MMOCore: " + player.getName() + " +" + amount + " en '" + target + "' por '" + sourceKey + "'.");
-        }
     }
 
     private void runFallbackCommand(OreDefinition ore, Player player, Block block) {
@@ -1174,14 +1289,28 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     }
 
     private void applyTexture(Skull skull, String textureHash) {
+        PlayerProfile profile = getCachedProfile(textureHash);
+        if (profile != null) {
+            skull.setOwnerProfile(profile);
+        }
+    }
+
+    private PlayerProfile getCachedProfile(String textureHash) {
+        if (textureHash == null || textureHash.isBlank()) return null;
+
+        PlayerProfile cached = profileCache.get(textureHash);
+        if (cached != null) return cached;
+
         try {
-            PlayerProfile profile = Bukkit.createPlayerProfile(UUID.randomUUID(), null);
+            PlayerProfile profile = Bukkit.createPlayerProfile(UUID.nameUUIDFromBytes(("mdvheadores:" + textureHash).getBytes(StandardCharsets.UTF_8)), null);
             PlayerTextures textures = profile.getTextures();
             textures.setSkin(new URL("http://textures.minecraft.net/texture/" + textureHash));
             profile.setTextures(textures);
-            skull.setOwnerProfile(profile);
+            profileCache.put(textureHash, profile);
+            return profile;
         } catch (MalformedURLException exception) {
             getLogger().warning("URL de textura inválida para cabeza: " + textureHash);
+            return null;
         }
     }
 
@@ -1230,6 +1359,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
         if (args[0].equalsIgnoreCase("reload")) {
             loadSettings();
+            generationQueue.clear();
+            queuedChunkKeys.clear();
+            restartGenerationTask();
             sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aMDVHeadOres recargado. Vetas: §f" + ores.size() + " §aNodos: §f" + treeNodes.size());
             return true;
         }
@@ -1286,20 +1418,57 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             boolean force = args.length >= 3 && args[2].equalsIgnoreCase("force");
             Chunk center = player.getLocation().getChunk();
             int count = 0;
+            int queued = 0;
             for (int cx = center.getX() - radius; cx <= center.getX() + radius; cx++) {
                 for (int cz = center.getZ() - radius; cz <= center.getZ() + radius; cz++) {
                     Chunk chunk = player.getWorld().getChunkAt(cx, cz);
-                    generateInChunk(chunk, force, true);
+                    if (generationThrottleEnabled && commandGenerateUsesQueue) {
+                        if (enqueueChunk(chunk, force, true)) queued++;
+                    } else {
+                        generateInChunk(chunk, force, true);
+                    }
                     count++;
                 }
             }
 
-            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aGeneración ejecutada en §f" + count + "§a chunks. Force: §f" + force);
+            if (generationThrottleEnabled && commandGenerateUsesQueue) {
+                sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aGeneración encolada en §f" + queued + "§a/§f" + count + "§a chunks. Force: §f" + force + "§a. Cola actual: §f" + generationQueue.size());
+            } else {
+                sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §aGeneración ejecutada en §f" + count + "§a chunks. Force: §f" + force);
+            }
             return true;
         }
 
         sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
         return true;
+    }
+
+    private static final class PendingChunk {
+        UUID worldId;
+        String worldName;
+        int x;
+        int z;
+        boolean force;
+        boolean fromCommand;
+        long readyAtMillis;
+    }
+
+    private static final class IntRange {
+        final int min;
+        final int max;
+
+        IntRange(int min, int max) {
+            this.min = min;
+            this.max = max;
+        }
+    }
+
+    private static final class MmoCoreXpSettings {
+        boolean enabled;
+        String professionId;
+        IntRange professionAmount;
+        IntRange mainAmount;
+        boolean split;
     }
 
     private static final class TreeNodeDefinition {
@@ -1325,7 +1494,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String fallbackCommand;
         boolean applyPhysicsOnPlace;
         boolean onlyOnSurfaceLogs;
-        MmoCoreXpSettings mmocoreXp = new MmoCoreXpSettings();
+        MmoCoreXpSettings mmocoreXp;
     }
 
     private static final class OreDefinition {
@@ -1354,24 +1523,6 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         String fallbackCommand;
         boolean applyPhysicsOnPlace;
         Set<Material> avoidNearMaterials;
-        MmoCoreXpSettings mmocoreXp = new MmoCoreXpSettings();
-    }
-
-    private static final class MmoCoreXpSettings {
-        boolean enabled;
-        String professionId;
-        IntRange professionXp = new IntRange(0, 0);
-        IntRange mainXp = new IntRange(0, 0);
-        boolean split;
-    }
-
-    private static final class IntRange {
-        final int min;
-        final int max;
-
-        IntRange(int min, int max) {
-            this.min = min;
-            this.max = max;
-        }
+        MmoCoreXpSettings mmocoreXp;
     }
 }
