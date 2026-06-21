@@ -1,5 +1,5 @@
 name: MDVHeadOres
-version: 1.0.6
+version: 1.0.7
 main: com.mdvcraft.headores.MDVHeadOresPlugin
 api-version: '1.21'
 author: MDVCraft
@@ -9,7 +9,7 @@ softdepend:
 commands:
   mdvheadores:
     description: Comandos de MDVHeadOres.
-    usage: /mdvheadores <reload|generate>
+    usage: /mdvheadores <reload|inspect|queue|generate>
     aliases:
       - mdvho
 permissions:

@@ -93,6 +93,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private boolean generationSkipIfQueueFull;
     private boolean commandGenerateUsesQueue;
     private BukkitTask generationTask;
+    private long queuedChunksTotal;
+    private long processedChunksTotal;
+    private long skippedQueueFullTotal;
 
     @Override
     public void onEnable() {
@@ -367,6 +370,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         if (queuedChunkKeys.contains(key)) return false;
 
         if (generationQueue.size() >= generationMaxQueueSize && generationSkipIfQueueFull) {
+            skippedQueueFullTotal++;
             if (debug) getLogger().warning("Cola de generación llena. Chunk omitido: " + chunk.getWorld().getName() + " " + chunk.getX() + "," + chunk.getZ());
             return false;
         }
@@ -378,10 +382,12 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         pending.z = chunk.getZ();
         pending.force = force;
         pending.fromCommand = fromCommand;
-        pending.readyAtMillis = System.currentTimeMillis() + (generationDelayTicks * 50L);
+        pending.enqueuedAtMillis = System.currentTimeMillis();
+        pending.readyAtMillis = pending.enqueuedAtMillis + (generationDelayTicks * 50L);
 
         generationQueue.addLast(pending);
         queuedChunkKeys.add(key);
+        queuedChunksTotal++;
         return true;
     }
 
@@ -416,6 +422,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
 
             Chunk chunk = world.getChunkAt(pending.x, pending.z);
             generateInChunk(chunk, pending.force, pending.fromCommand);
+            processedChunksTotal++;
             processed++;
         }
     }
@@ -1353,7 +1360,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         }
 
         if (args.length == 0) {
-            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
+            sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, inspect, queue o generate <radio> [force]");
             return true;
         }
 
@@ -1399,6 +1406,11 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("queue") || args[0].equalsIgnoreCase("status") || args[0].equalsIgnoreCase("cola") || args[0].equalsIgnoreCase("estado")) {
+            sendQueueStatus(sender);
+            return true;
+        }
+
         if (args[0].equalsIgnoreCase("generate")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("Este comando solo puede usarlo un jugador.");
@@ -1439,8 +1451,75 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
-        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, /mdvheadores inspect o /mdvheadores generate <radio> [force]");
+        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eUsa: /mdvheadores reload, inspect, queue o generate <radio> [force]");
         return true;
+    }
+
+    private void sendQueueStatus(CommandSender sender) {
+        long now = System.currentTimeMillis();
+        int queued = generationQueue.size();
+        int ready = 0;
+        long oldestAgeMillis = 0L;
+        long firstReadyInMillis = 0L;
+        Map<String, Integer> byWorld = new HashMap<>();
+
+        PendingChunk first = generationQueue.peekFirst();
+        if (first != null) {
+            firstReadyInMillis = Math.max(0L, first.readyAtMillis - now);
+        }
+
+        for (PendingChunk pending : generationQueue) {
+            if (pending.readyAtMillis <= now) ready++;
+            oldestAgeMillis = Math.max(oldestAgeMillis, now - pending.enqueuedAtMillis);
+            byWorld.put(pending.worldName, byWorld.getOrDefault(pending.worldName, 0) + 1);
+        }
+
+        double chunksPerSecond = generationThrottleEnabled
+                ? ((20.0D / Math.max(1, generationIntervalTicks)) * Math.max(1, generationChunksPerInterval))
+                : 0.0D;
+        long estimatedSeconds = chunksPerSecond > 0.0D ? (long) Math.ceil(queued / chunksPerSecond) : 0L;
+        boolean full = queued >= generationMaxQueueSize;
+
+        sender.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §dEstado de generación MDVHeadOres");
+        sender.sendMessage("§7Throttle: " + (generationThrottleEnabled ? "§aON" : "§cOFF")
+                + " §8| §7Delay: §f" + generationDelayTicks + " ticks"
+                + " §8| §7Ritmo: §f" + generationChunksPerInterval + " chunk(s) cada " + generationIntervalTicks + " ticks");
+        sender.sendMessage("§7Cola: §f" + queued + "§7/§f" + generationMaxQueueSize
+                + " §8| §7Listos: §f" + ready
+                + " §8| §7Estado: " + (full ? "§cLLENA" : "§aOK"));
+        sender.sendMessage("§7Procesados: §a" + processedChunksTotal
+                + " §8| §7Encolados: §e" + queuedChunksTotal
+                + " §8| §7Omitidos por cola llena: §c" + skippedQueueFullTotal);
+
+        if (queued > 0) {
+            sender.sendMessage("§7Primer chunk listo en: §f" + formatSeconds(firstReadyInMillis / 1000L)
+                    + " §8| §7Más viejo en cola: §f" + formatSeconds(oldestAgeMillis / 1000L)
+                    + " §8| §7Tiempo aprox. para vaciar: §f" + formatSeconds(estimatedSeconds));
+        }
+
+        if (!byWorld.isEmpty()) {
+            StringBuilder worlds = new StringBuilder();
+            int shown = 0;
+            for (Map.Entry<String, Integer> entry : byWorld.entrySet()) {
+                if (shown++ > 0) worlds.append("§8, ");
+                worlds.append("§f").append(entry.getKey()).append("§7:§e").append(entry.getValue());
+                if (shown >= 5 && byWorld.size() > shown) {
+                    worlds.append("§8, §7+").append(byWorld.size() - shown).append(" mundos");
+                    break;
+                }
+            }
+            sender.sendMessage("§7Por mundo: " + worlds);
+        }
+    }
+
+    private String formatSeconds(long seconds) {
+        if (seconds <= 0) return "0s";
+        long hours = seconds / 3600L;
+        long minutes = (seconds % 3600L) / 60L;
+        long secs = seconds % 60L;
+        if (hours > 0) return hours + "h " + minutes + "m " + secs + "s";
+        if (minutes > 0) return minutes + "m " + secs + "s";
+        return secs + "s";
     }
 
     private static final class PendingChunk {
@@ -1450,6 +1529,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         int z;
         boolean force;
         boolean fromCommand;
+        long enqueuedAtMillis;
         long readyAtMillis;
     }
 
