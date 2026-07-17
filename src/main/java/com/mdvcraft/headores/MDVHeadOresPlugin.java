@@ -1,5 +1,7 @@
 package com.mdvcraft.headores;
 
+import com.mdvcraft.headores.api.event.MDVResourceBreakEvent;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
@@ -487,7 +489,11 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             runFallbackCommand(ore, player, block);
         }
 
-        giveMmoCoreXp(player, ore.mmocoreXp, ore.key);
+        AwardedXp awardedXp = giveMmoCoreXp(player, ore.mmocoreXp, ore.key);
+        Bukkit.getPluginManager().callEvent(new MDVResourceBreakEvent(
+                player, MDVResourceBreakEvent.ResourceKind.ORE, ore.key, ore.mmoitemsBlockId,
+                ore.dropType, ore.dropId, ore.dropAmount, block.getLocation(),
+                awardedXp.professionId(), awardedXp.professionXp(), awardedXp.mainXp()));
         playConfiguredSound(block.getLocation(), ore.breakSound, 0.8f, 1.15f);
     }
 
@@ -533,7 +539,11 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             runFallbackCommand(node, player, block);
         }
 
-        giveMmoCoreXp(player, node.mmocoreXp, node.key);
+        AwardedXp awardedXp = giveMmoCoreXp(player, node.mmocoreXp, node.key);
+        Bukkit.getPluginManager().callEvent(new MDVResourceBreakEvent(
+                player, MDVResourceBreakEvent.ResourceKind.TREE_NODE, node.key, node.mmoitemsBlockId,
+                node.dropType, node.dropId, node.dropAmount, block.getLocation(),
+                awardedXp.professionId(), awardedXp.professionXp(), awardedXp.mainXp()));
         playConfiguredSound(block.getLocation(), node.breakSound, 0.8f, 1.05f);
     }
 
@@ -582,18 +592,22 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         return Math.max(0, range.min + random.nextInt(range.max - range.min + 1));
     }
 
-    private void giveMmoCoreXp(Player player, MmoCoreXpSettings settings, String source) {
-        if (player == null || settings == null || !settings.enabled) return;
+    private AwardedXp giveMmoCoreXp(Player player, MmoCoreXpSettings settings, String source) {
+        if (player == null || settings == null || !settings.enabled) return AwardedXp.NONE;
 
         int professionAmount = rollIntRange(settings.professionAmount);
-        if (professionAmount > 0 && settings.professionId != null && !settings.professionId.isBlank()) {
-            dispatchMmoCoreExpCommand(player, settings.professionId, professionAmount, settings.split, source);
+        String professionId = settings.professionId == null ? "" : settings.professionId;
+        if (professionAmount > 0 && !professionId.isBlank()) {
+            dispatchMmoCoreExpCommand(player, professionId, professionAmount, settings.split, source);
+        } else {
+            professionAmount = 0;
         }
 
         int mainAmount = rollIntRange(settings.mainAmount);
         if (mainAmount > 0) {
             dispatchMmoCoreExpCommand(player, "main", mainAmount, settings.split, source);
         }
+        return new AwardedXp(professionId, professionAmount, mainAmount);
     }
 
     private void dispatchMmoCoreExpCommand(Player player, String target, int amount, boolean split, String source) {
@@ -1541,6 +1555,10 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             this.min = min;
             this.max = max;
         }
+    }
+
+    private record AwardedXp(String professionId, int professionXp, int mainXp) {
+        private static final AwardedXp NONE = new AwardedXp("", 0, 0);
     }
 
     private static final class MmoCoreXpSettings {
