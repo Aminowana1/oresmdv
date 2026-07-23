@@ -1,6 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.0.3: evita colocar cabezas pegadas a minerales vanilla y aplica actualizaciones físicas al colocar.
+# v1.0.9: protege vetas y nodos marcados para que el agua/lava no destruyan sus cabezas.
 
 debug: false
 
@@ -12,6 +12,15 @@ generate-on-new-chunks: true
 
 # Marca chunks para no generar dos veces con /mdvheadores generate.
 mark-generated-chunks: true
+
+# Protege las cabezas internas del plugin frente a líquidos.
+# El flujo se detiene únicamente al intentar ocupar una veta o nodo marcado por MDVHeadOres.
+# Cuando el jugador rompe el recurso normalmente, el líquido puede continuar avanzando.
+resource-protection:
+  prevent-fluid-destruction: true
+  fluids:
+    - WATER
+    - LAVA
 
 
 # Modo optimizado para exploración en vivo.

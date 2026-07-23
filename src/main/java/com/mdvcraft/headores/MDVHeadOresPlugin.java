@@ -25,8 +25,12 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockFromToEvent;
+import org.bukkit.event.block.BlockPhysicsEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -86,6 +90,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
     private String mmocoreExpCommandTemplate;
     private String noPowerMessage;
     private String noAxePowerMessage;
+
+    private boolean protectResourcesFromFluids;
+    private final Set<Material> protectedFluidTypes = new HashSet<>();
 
     private boolean generationThrottleEnabled;
     private int generationIntervalTicks;
@@ -148,6 +155,21 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
         commandGenerateUsesQueue = cfg.getBoolean("generation-throttle.command-generate-uses-queue", true);
         noPowerMessage = cfg.getString("no-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente poder para minar esta veta. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
         noAxePowerMessage = cfg.getString("no-axe-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c.");
+
+        protectResourcesFromFluids = cfg.getBoolean("resource-protection.prevent-fluid-destruction", true);
+        protectedFluidTypes.clear();
+        List<String> configuredFluids = cfg.getStringList("resource-protection.fluids");
+        if (configuredFluids.isEmpty()) {
+            configuredFluids = List.of("WATER", "LAVA");
+        }
+        for (String materialName : configuredFluids) {
+            Material material = Material.matchMaterial(materialName);
+            if (material == Material.WATER || material == Material.LAVA) {
+                protectedFluidTypes.add(material);
+            } else {
+                getLogger().warning("Fluido inválido en resource-protection.fluids: " + materialName + ". Solo se admiten WATER y LAVA.");
+            }
+        }
 
         ores.clear();
         treeNodes.clear();
@@ -427,6 +449,73 @@ public final class MDVHeadOresPlugin extends JavaPlugin implements Listener {
             processedChunksTotal++;
             processed++;
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onFluidFlow(BlockFromToEvent event) {
+        if (!protectResourcesFromFluids || !protectedFluidTypes.contains(event.getBlock().getType())) return;
+
+        Block destination = event.getToBlock();
+        if (!isProtectedResourceBlock(destination)) return;
+
+        event.setCancelled(true);
+        if (debug) {
+            getLogger().info("Flujo de " + event.getBlock().getType() + " bloqueado para proteger recurso en "
+                    + formatBlockLocation(destination));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        if (!protectResourcesFromFluids || !isProtectedFluidBucket(event.getBucket())) return;
+
+        Block target = event.getBlock();
+        Block relativeTarget = event.getBlockClicked().getRelative(event.getBlockFace());
+        Block protectedBlock = isProtectedResourceBlock(target) ? target
+                : (isProtectedResourceBlock(relativeTarget) ? relativeTarget : null);
+        if (protectedBlock == null) return;
+
+        event.setCancelled(true);
+        if (debug) {
+            getLogger().info("Vaciado de " + event.getBucket() + " bloqueado para proteger recurso en "
+                    + formatBlockLocation(protectedBlock));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onProtectedResourcePhysics(BlockPhysicsEvent event) {
+        if (!protectResourcesFromFluids || !isProtectedResourceBlock(event.getBlock())) return;
+
+        Material sourceType = event.getSourceBlock() == null ? null : event.getSourceBlock().getType();
+        if (!protectedFluidTypes.contains(sourceType) && !protectedFluidTypes.contains(event.getChangedType())) return;
+
+        event.setCancelled(true);
+        if (debug) {
+            getLogger().info("Física de fluido bloqueada para proteger recurso en "
+                    + formatBlockLocation(event.getBlock()));
+        }
+    }
+
+    private boolean isProtectedFluidBucket(Material bucket) {
+        return (bucket == Material.WATER_BUCKET && protectedFluidTypes.contains(Material.WATER))
+                || (bucket == Material.LAVA_BUCKET && protectedFluidTypes.contains(Material.LAVA));
+    }
+
+    private boolean isProtectedResourceBlock(Block block) {
+        if (block == null) return false;
+        Material type = block.getType();
+        if (type != Material.PLAYER_HEAD && type != Material.PLAYER_WALL_HEAD) return false;
+
+        BlockState state = block.getState();
+        if (!(state instanceof TileState tileState)) return false;
+
+        PersistentDataContainer pdc = tileState.getPersistentDataContainer();
+        return pdc.has(oreKey, PersistentDataType.STRING)
+                || pdc.has(nodeKey, PersistentDataType.STRING);
+    }
+
+    private String formatBlockLocation(Block block) {
+        return block.getWorld().getName() + " " + block.getX() + "," + block.getY() + "," + block.getZ();
     }
 
     @EventHandler(ignoreCancelled = true)
