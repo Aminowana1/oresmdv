@@ -6,8 +6,7 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * Evento publico disparado cuando un jugador rompe correctamente una veta o nodo de MDVHeadOres.
- * Solo se llama después de superar el requisito de poder y entregar/generar el drop.
+ * Evento público disparado cuando un jugador rompe correctamente una veta o nodo de MDVHeadOres.
  */
 public final class MDVResourceBreakEvent extends Event {
     private static final HandlerList HANDLERS = new HandlerList();

@@ -1,8 +1,14 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.0.9: protege vetas y nodos marcados para que el agua/lava no destruyan sus cabezas.
+# v1.1.0: seguimiento económico por recurso, recuperación de chunks aplazados y protección ampliada.
 
 debug: false
+
+debug-options:
+  # Muestra el resumen de los chunks que realmente colocaron recursos.
+  log-generated-chunks: true
+  # Normalmente false para no llenar la consola al explorar o teletransportarse.
+  log-unloaded-chunks: false
 
 # Ruta al archivo de bloques de MMOItems, relativa a la carpeta raíz del servidor.
 mmoitems-block-file: "plugins/MMOItems/item/block.yml"
@@ -10,37 +16,28 @@ mmoitems-block-file: "plugins/MMOItems/item/block.yml"
 # Generar solo al cargar chunks nuevos.
 generate-on-new-chunks: true
 
-# Marca chunks para no generar dos veces con /mdvheadores generate.
+# Se conserva por compatibilidad con versiones anteriores.
+# El sistema nuevo usa una máscara de 64 bits por chunk y un bit por recurso.
 mark-generated-chunks: true
 
-# Protege las cabezas internas del plugin frente a líquidos.
-# El flujo se detiene únicamente al intentar ocupar una veta o nodo marcado por MDVHeadOres.
-# Cuando el jugador rompe el recurso normalmente, el líquido puede continuar avanzando.
-resource-protection:
-  prevent-fluid-destruction: true
-  fluids:
-    - WATER
-    - LAVA
-
-
-# Modo optimizado para exploración en vivo.
-# En vez de generar minerales custom inmediatamente al cargar el chunk,
-# los pone en una cola y procesa pocos chunks cada intervalo.
-# Esto evita tirones fuertes cuando varios jugadores exploran o usan /rtp.
-generation-throttle:
+generation-tracking:
   enabled: true
-  # Espera antes de procesar un chunk nuevo. Ayuda a que la generación vanilla termine primero.
-  delay-after-chunk-load-ticks: 40
-  # Cada cuántos ticks procesa la cola. 4 ticks = 0.2s aprox.
-  interval-ticks: 4
-  # Chunks procesados por intervalo. Para server público, 1 es lo más seguro.
-  chunks-per-interval: 1
-  # Cola máxima. Si 40 jugadores exploran a la vez, conviene dejarla alta.
-  max-queue-size: 10000
-  # Si la cola está llena, omite chunks nuevos en vez de congelar el servidor.
-  skip-if-queue-full: true
-  # /mdvheadores generate también usa la cola para no pegar tirones.
-  command-generate-uses-queue: true
+
+  # Los chunks existentes también se revisan al cargarse.
+  # Solo se tiran los recursos cuyo tracking-bit todavía no esté registrado.
+  process-existing-chunks-on-load: true
+
+  # Migración desde 1.0.9 y anteriores:
+  # todo chunk que ya existía antes de esta actualización se considera procesado
+  # para estos cinco recursos. De este modo solo tira Nimbrel, Oricalco, Mithril,
+  # Nudo Rúnico, Savia Áurea y Nudo Primordial.
+  assume-legacy-resources-on-existing-chunks: true
+  legacy-assumed-resources:
+    - viridita
+    - amatista_encantada
+    - umbrita
+    - nudo_vivo
+    - tronco_corrupto
 
 # Si está true, los picos vanilla tienen poder básico:
 # madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
@@ -55,9 +52,8 @@ vanilla-axes-have-power: true
 # Variables: %player%, %world%, %x%, %y%, %z%, %ore%, %drop_type%, %drop_id%, %amount%
 default-fallback-command: "mi give %drop_type% %drop_id% %player% %amount%"
 
-# Comando usado para dar XP de MMOCore cuando se rompe una veta/nodo custom.
+# Comando usado para otorgar XP de MMOCore.
 # Variables: %player%, %target%, %profession%, %amount%, %split%, %source%
-# %target% puede ser una profesión como mining/woodcutting o "main" para nivel principal.
 mmocore-exp-command: "mmocore admin exp give %player% %target% %amount% %split%"
 
 # Mensaje si el pico no tiene poder suficiente.
@@ -66,21 +62,41 @@ no-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu pico no tiene suficiente p
 # Mensaje si el hacha no tiene poder suficiente para nodos de árboles.
 no-axe-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."
 
+generation-throttle:
+  enabled: true
+  delay-after-chunk-load-ticks: 40
+  interval-ticks: 6
+  chunks-per-interval: 1
+  max-queue-size: 15000
+  skip-if-queue-full: true
+  command-generate-uses-queue: true
+
+  # Revisa periódicamente chunks que siguen cargados pero quedaron fuera de la cola.
+  # También recupera automáticamente los rechazados por cola llena.
+  # 1200 ticks = 60 segundos.
+  rescan-loaded-chunks-interval-ticks: 1200
+  
+resource-protection:
+  prevent-fluid-destruction: true
+  prevent-explosion-destruction: true
+  prevent-piston-destruction: true
+  prevent-physics-destruction: true
+  fluids:
+    - WATER
+    - LAVA
 ores:
   viridita:
     enabled: true
 
-    # ID del bloque dentro de plugins/MMOItems/item/block.yml
-    # En tu caso: VETACRISTALVE
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 0
+
     mmoitems-block-id: "VETACRISTALVE"
 
-    # Item de MMOItems que se dropea en el mundo al romper la cabeza.
-    # En tu caso: CRISTALVERDE
     drop-id: "CRISTALVERDE"
     drop-type: "MATERIAL"
     drop-amount: 1
 
-    # Usa skull-texture.value y name desde el bloque de MMOItems.
     texture-from-mmoitems: true
     name-from-mmoitems: true
 
@@ -91,74 +107,107 @@ ores:
       - STONE
       - DEEPSLATE
 
-    min-y: -48
-    max-y: 48
+    min-y: -15
+    max-y: 0
 
-    # 0.21 = 21% de chunks nuevos tienen intento de veta.
-    chunk-chance: 0.21
+    # Mineral de transición hacia Tier 2.
+    # 0.24 = 24% de chunks nuevos tienen intento de veta.
+    chunk-chance: 0.24
+    veins-per-chunk: 1
+    vein-min: 1
+    vein-max: 3
 
-    # Vetas chicas.
+    placement: FLOOR_HEAD
+
+    avoid-near-vanilla-ores: true
+    avoid-near-materials: []
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    # Requiere pico con poder 4.
+    # Vanilla: diamante 4, netherita 5.
+    required-pickaxe-power: 4
+
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "8-12"
+      main-amount: "0"
+      split: false
+      
+  amatista_encantada:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 1
+
+    mmoitems-block-id: "VETAAMATISTAENCANTADA"
+
+    drop-id: "FRAGMENTOAMATISTAENCANTADA"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "9-14"
+      main-amount: "0"
+      split: false
+      
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    replace:
+      - STONE
+      - DEEPSLATE
+
+    min-y: -30
+    max-y: -16
+
+    # Mineral principal Tier 2.
+    # 0.065 = 6.5% de chunks nuevos tienen intento de veta.
+    chunk-chance: 0.065
     veins-per-chunk: 1
     vein-min: 1
     vein-max: 2
 
-    # FLOOR_HEAD reemplaza piedra por una cabeza puesta en el suelo.
     placement: FLOOR_HEAD
 
-    # Evita bugs raros con minerales vanilla pegados a las cabezas.
-    # Si está true, no coloca una cabeza si al lado/arriba/abajo hay un mineral vanilla
-    # como LAPIS_ORE, DIAMOND_ORE, IRON_ORE, etc.
     avoid-near-vanilla-ores: true
-
-    # Lista extra opcional de bloques a evitar alrededor de la cabeza.
     avoid-near-materials: []
-
-    # Aplica física/actualización de vecinos al colocar la cabeza.
-    # Ayuda a evitar bloques fantasma o actualizaciones raras cerca de minerales vanilla.
     apply-physics-on-place: true
 
-    # Evita que Minecraft dropee la cabeza vanilla.
     prevent-vanilla-drops: true
-
-    # Si el pico tiene Silk Touch, se ignora: igual dropea CRISTALVERDE.
     ignore-silk-touch: true
-
-    # true = dropea el MMOItem físicamente en el suelo.
-    # false = usa fallback-command y lo entrega por comando.
     drop-naturally: true
 
-    # Poder mínimo de pico requerido.
-    # MMOItems: usa la stat pickaxe-power / Poder de pico.
-    # Vanilla: madera 1, piedra 2, hierro 3, oro 2, diamante 4, netherita 5.
-    required-pickaxe-power: 1
-
-    # XP opcional para MMOCore al romper esta veta custom.
-    # profession-id debe coincidir con el archivo de profesión: mining.yml -> mining.
-    # main-amount da XP al nivel principal; déjalo en 0 si no quieres.
-    mmocore-xp:
-      enabled: true
-      profession-id: "mining"
-      profession-amount: "3-6"
-      main-amount: "0"
-      split: false
+    required-pickaxe-power: 6
 
     break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
     fail-sound: "BLOCK_NOTE_BLOCK_BASS"
 
+  umbrita:
+    enabled: true
 
-# Nodos de árboles: recursos como retoños, savia, hongos o ramitas pegadas al costado de troncos.
-# Funcionan igual que las vetas, pero se colocan como PLAYER_WALL_HEAD al lado de troncos.
-# Para minarlos, el item debe tener lore como:
-# '&3 &7■ &fPoder de Hacha: 2'
-tree-nodes:
-  brote_resinoso:
-    enabled: false
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 2
 
-    # ID del bloque/cabeza dentro de plugins/MMOItems/item/block.yml
-    mmoitems-block-id: "BROTERESINOSO"
-
-    # Item de MMOItems que se dropea al romper el nodo.
-    drop-id: "BROTERESINOSO"
+    mmoitems-block-id: "VETAUMBRITA"
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "12-17"
+      main-amount: "0"
+      split: false
+      
+    drop-id: "FRAGMENTOUMBRITA"
     drop-type: "MATERIAL"
     drop-amount: 1
 
@@ -168,7 +217,244 @@ tree-nodes:
     worlds:
       - world
 
-    # Troncos donde puede aparecer pegado.
+    replace:
+      - DEEPSLATE
+
+    min-y: -45
+    max-y: -31
+
+    # Mineral raro Tier 2.
+    # 0.025 = 2.5% de chunks nuevos tienen intento de veta.
+    chunk-chance: 0.025
+    veins-per-chunk: 1
+    vein-min: 1
+    vein-max: 1
+
+    placement: FLOOR_HEAD
+
+    avoid-near-vanilla-ores: true
+    avoid-near-materials: []
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    required-pickaxe-power: 7
+
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+    
+
+
+
+
+
+
+
+
+
+
+  nimbrel:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 3
+
+    mmoitems-block-id: "VETANIMBREL"
+
+    drop-id: "FRAGMENTONIMBREL"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "10-15"
+      main-amount: "0"
+      split: false
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    # Solo reemplaza roca natural presente en grandes cumbres.
+    replace:
+      - STONE
+      - CALCITE
+
+    # Mineral T2 exclusivo de grandes alturas.
+    # En chunks naturales, esta altura lo limita prácticamente
+    # a picos, riscos y montañas elevadas.
+    min-y: 132
+    max-y: 255
+
+    # Misma probabilidad y tamaño de veta que Amatista Encantada.
+    # 0.05 = 5% de los chunks aptos realizan un intento.
+    chunk-chance: 0.05
+    veins-per-chunk: 1
+    vein-min: 1
+    vein-max: 2
+
+    placement: FLOOR_HEAD
+
+    avoid-near-vanilla-ores: true
+    avoid-near-materials: []
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    # Mineral T2.
+    required-pickaxe-power: 6
+
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+
+  oricalco:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 4
+
+    mmoitems-block-id: "VETAORICALCO"
+
+    drop-id: "FRAGMENTOORICALCO"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "18-25"
+      main-amount: "0"
+      split: false
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    replace:
+      - DEEPSLATE
+
+    # Mineral T3 distribuido por una franja profunda amplia.
+    min-y: -57
+    max-y: -28
+
+    # Cada formación intenta generar exactamente 2 menas.
+    # 0.005 = una formación cada 200 chunks aptos:
+    # cinco veces más difícil de hallar que Umbrita.
+    chunk-chance: 0.005
+    veins-per-chunk: 1
+    vein-min: 2
+    vein-max: 2
+
+    placement: FLOOR_HEAD
+
+    avoid-near-vanilla-ores: true
+    avoid-near-materials: []
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    # Primer mineral natural T3.
+    required-pickaxe-power: 8
+
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+
+  mithril:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 5
+
+    mmoitems-block-id: "VETAMITHRIL"
+
+    drop-id: "FRAGMENTOMITHRIL"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "mining"
+      profession-amount: "35-50"
+      main-amount: "0"
+      split: false
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    replace:
+      - DEEPSLATE
+
+    # Comparte la región profunda del Oricalco,
+    # pero es excepcionalmente difícil de encontrar.
+    min-y: -57
+    max-y: -28
+
+    # 0.0008 = 0.08%, aproximadamente un intento
+    # por cada 1250 chunks aptos.
+    chunk-chance: 0.0008
+    veins-per-chunk: 1
+    vein-min: 2
+    vein-max: 4
+
+    placement: FLOOR_HEAD
+
+    avoid-near-vanilla-ores: true
+    avoid-near-materials: []
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    # Mejor mineral natural T3.
+    required-pickaxe-power: 9
+
+    break-sound: "BLOCK_AMETHYST_BLOCK_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS" 
+# Nodos de árboles: recursos como retoños, savia, hongos o ramitas pegadas al costado de troncos.
+# Funcionan igual que las vetas, pero se colocan como PLAYER_WALL_HEAD al lado de troncos.
+# Para minarlos, el item debe tener lore como:
+# '&3 &7■ &fPoder de Hacha: 2'
+tree-nodes:
+  nudo_vivo:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 6
+
+    mmoitems-block-id: "VETANUDOVIVO"
+
+    drop-id: "NUDOVIVO"
+    drop-type: "MATERIAL"
+    drop-amount: 2
+    mmocore-xp:
+      enabled: true
+      profession-id: "woodcutting"
+      profession-amount: "8-10"
+      main-amount: "0"
+      split: false
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
     attach-to:
       - OAK_LOG
       - SPRUCE_LOG
@@ -183,26 +469,244 @@ tree-nodes:
     min-y: 50
     max-y: 120
 
-    # Probabilidad por chunk y cantidad de nodos.
-    chunk-chance: 0.12
+    # Recurso e leñador Tier 1.
+    chunk-chance: 0.16
     nodes-per-chunk: 1
 
-    # Requiere hacha/item con Poder de Hacha.
-    required-axe-power: 2
+    required-axe-power: 4
 
-    # XP opcional para MMOCore al romper este nodo custom.
-    # profession-id debe coincidir con el archivo de profesión: woodcutting.yml -> woodcutting.
-    # main-amount da XP al nivel principal; déjalo en 0 si no quieres.
+    only-on-surface-logs: true
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    break-sound: "BLOCK_WOOD_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+    
+    
+    
+  tronco_corrupto:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 7
+
+    mmoitems-block-id: "NODOTRONCOCORRUPTO"
+
+    drop-id: "TRONCOCORRUPTO"
+    drop-type: "MATERIAL"
+    drop-amount: 1
     mmocore-xp:
       enabled: true
       profession-id: "woodcutting"
-      profession-amount: "3-6"
+      profession-amount: "10-15"
+      main-amount: "0"
+      split: false
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    attach-to:
+      - OAK_LOG
+      - SPRUCE_LOG
+      - BIRCH_LOG
+      - JUNGLE_LOG
+      - ACACIA_LOG
+      - DARK_OAK_LOG
+      - MANGROVE_LOG
+      - CHERRY_LOG
+      - PALE_OAK_LOG
+
+    min-y: 50
+    max-y: 120
+
+    # Recurso Tier 2 de leñador.
+    chunk-chance: 0.015
+    nodes-per-chunk: 1
+
+    required-axe-power: 6
+
+    only-on-surface-logs: true
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    break-sound: "BLOCK_WOOD_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+    
+    
+    
+    
+    
+    
+    
+
+  nudo_runico:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 8
+
+    mmoitems-block-id: "NODORUNICO"
+
+    drop-id: "NUDORUNICO"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "woodcutting"
+      profession-amount: "12-17"
       main-amount: "0"
       split: false
 
-    # Si está true, intenta colocarlo en troncos con aire alrededor, más visible como retoño/ramita.
-    only-on-surface-logs: true
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
 
+    worlds:
+      - world
+
+    attach-to:
+      - OAK_LOG
+      - SPRUCE_LOG
+      - BIRCH_LOG
+      - JUNGLE_LOG
+      - ACACIA_LOG
+      - DARK_OAK_LOG
+      - MANGROVE_LOG
+      - CHERRY_LOG
+      - PALE_OAK_LOG
+
+    min-y: 50
+    max-y: 120
+
+    # Dos veces más difícil que Tronco Corrupto:
+    # 0.015 ÷ 2 = 0.0075.
+    chunk-chance: 0.0075
+    nodes-per-chunk: 1
+
+    # Nodo T2.
+    required-axe-power: 6
+
+    only-on-surface-logs: true
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    break-sound: "BLOCK_WOOD_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+
+  savia_aurea:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 9
+
+    mmoitems-block-id: "NODOSAVIAAUREA"
+
+    drop-id: "SAVIAAUREA"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "woodcutting"
+      profession-amount: "22-32"
+      main-amount: "0"
+      split: false
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    attach-to:
+      - OAK_LOG
+      - SPRUCE_LOG
+      - BIRCH_LOG
+      - JUNGLE_LOG
+      - ACACIA_LOG
+      - DARK_OAK_LOG
+      - MANGROVE_LOG
+      - CHERRY_LOG
+      - PALE_OAK_LOG
+
+    min-y: 50
+    max-y: 120
+
+    # Nueve veces más difícil que Nudo Rúnico:
+    # 0.0075 ÷ 9 = 0.00083333, cerca de 1 cada 1200 chunks.
+    chunk-chance: 0.00083333
+    nodes-per-chunk: 1
+
+    required-axe-power: 8
+
+    only-on-surface-logs: true
+    apply-physics-on-place: true
+
+    prevent-vanilla-drops: true
+    ignore-silk-touch: true
+    drop-naturally: true
+
+    break-sound: "BLOCK_WOOD_BREAK"
+    fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+
+  nudo_primordial:
+    enabled: true
+
+    # Bit estable y único. No cambiar después de publicar el mundo.
+    tracking-bit: 10
+
+    mmoitems-block-id: "NODOPRIMORDIAL"
+
+    drop-id: "NUDOPRIMORDIAL"
+    drop-type: "MATERIAL"
+    drop-amount: 1
+
+    mmocore-xp:
+      enabled: true
+      profession-id: "woodcutting"
+      profession-amount: "35-50"
+      main-amount: "0"
+      split: false
+
+    texture-from-mmoitems: true
+    name-from-mmoitems: true
+
+    worlds:
+      - world
+
+    # Se limita a árboles grandes, densos o de apariencia antigua.
+    attach-to:
+      - DARK_OAK_LOG
+      - JUNGLE_LOG
+      - MANGROVE_LOG
+      - PALE_OAK_LOG
+
+    min-y: 50
+    max-y: 120
+
+    # Ocho veces más difícil que Savia Áurea:
+    # 0.00083333 ÷ 8 = 0.00010417, cerca de 1 cada 9600 chunks.
+    # La restricción de troncos reduce todavía más su aparición real.
+    chunk-chance: 0.00010417
+    nodes-per-chunk: 2
+
+    # Mejor nodo natural T3.
+    required-axe-power: 9
+
+    only-on-surface-logs: true
     apply-physics-on-place: true
 
     prevent-vanilla-drops: true
