@@ -39,7 +39,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
 
         PluginCommand command = getCommand("mdvheadores");
         if (command != null) command.setExecutor(new MDVHeadOresCommand(this));
-        getLogger().info("MDVHeadOres 1.1.0 activado. Vetas: " + registry.ores().size()
+        getLogger().info("MDVHeadOres 1.1.1 activado. Vetas: " + registry.ores().size()
                 + ", nodos: " + registry.treeNodes().size()
                 + ", recursos rastreados: " + tracker.activeResourceCount());
     }

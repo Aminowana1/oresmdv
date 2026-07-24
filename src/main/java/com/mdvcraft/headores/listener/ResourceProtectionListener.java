@@ -26,6 +26,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.List;
 
 public final class ResourceProtectionListener implements Listener {
+    private static final BlockFace[] HORIZONTAL_FACES = {
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST
+    };
+
     private final JavaPlugin plugin;
     private final PluginSettings settings;
     private final ResourceKeys keys;
@@ -120,7 +124,7 @@ public final class ResourceProtectionListener implements Listener {
         Block above = block.getRelative(BlockFace.UP);
         if (above.getType() == Material.PLAYER_HEAD && isProtectedResource(above)) return true;
 
-        for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST}) {
+        for (BlockFace face : HORIZONTAL_FACES) {
             Block adjacent = block.getRelative(face);
             if (adjacent.getType() != Material.PLAYER_WALL_HEAD || !isProtectedResource(adjacent)) continue;
             BlockData data = adjacent.getBlockData();

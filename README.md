@@ -1,31 +1,64 @@
-# MDVHeadOres 1.1.0
+# MDVHeadOres 1.1.1
 
-Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha y experiencia opcional de MMOCore.
+Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha, experiencia opcional de MMOCore y seguimiento compacto por chunk.
 
-## Novedades de 1.1.0
+## Rendimiento de 1.1.1
 
-### Tiradas registradas por recurso
+### Escaneo incremental
 
-Cada chunk guarda una sola máscara `LONG` en su Persistent Data Container. Cada recurso ocupa un bit:
+La auditoría periódica ya no recorre todos los chunks cargados en un único tick. Conserva una instantánea por mundo y la procesa con dos límites simultáneos:
+
+```yaml
+rescan-loaded-chunks-per-tick: 128
+rescan-max-millis-per-tick: 1.0
+```
+
+Al alcanzar cualquiera de los dos límites, continúa en el tick siguiente. No carga chunks descargados ni recorre bloques; únicamente lee la máscara `LONG` del chunk y comprueba si hay bits pendientes.
+
+### Recuperación dirigida
+
+Los chunks rechazados por una cola llena se guardan en una cola compacta de reintentos:
+
+```yaml
+retry-chunks-per-tick: 64
+retry-max-millis-per-tick: 0.5
+max-retry-size: 30000
+```
+
+Así, el caso común se recupera sin esperar al siguiente escaneo global.
+
+### Retirada al descargar
+
+La cola principal y la de reintentos usan `LinkedHashMap`: mantienen orden FIFO, deduplican y permiten retirar en O(1) un chunk que se descarga. Cuando vuelve a cargarse, sus bits siguen pendientes y entra nuevamente por `ChunkLoadEvent`.
+
+### Presupuesto de generación
+
+```yaml
+max-processing-millis-per-run: 1.5
+max-dequeues-per-run: 16
+```
+
+La cola deja de iniciar trabajo adicional al agotar su presupuesto. Un chunk ya iniciado puede finalizar para no dejar una tirada a medias.
+
+## Seguimiento por recurso
+
+Cada chunk guarda una única máscara `LONG`. Cada recurso ocupa un bit estable:
 
 ```yaml
 tracking-bit: 0
 ```
 
-Con 11 recursos, el seguimiento usa 8 bytes de datos numéricos por chunk, más la sobrecarga normal del PDC. No se guarda una cadena larga ni una entrada independiente por mineral.
+Reglas:
 
-Reglas importantes:
+- bits permitidos: `0` a `62`;
+- nunca cambiar ni reutilizar el bit de un recurso publicado;
+- la tirada se marca aunque falle la probabilidad o no encuentre lugar;
+- una excepción deja el bit pendiente;
+- un recurso futuro recibe un bit nuevo y se tira una sola vez en chunks existentes.
 
-- cada `tracking-bit` debe ser único;
-- admite bits de `0` a `62`;
-- no se debe cambiar el bit de un recurso después de publicar el mundo;
-- una tirada se marca aunque la probabilidad falle o no encuentre una posición válida;
-- al añadir un recurso nuevo con un bit nuevo, los chunks existentes lo tiran una sola vez al volver a cargarse;
-- los recursos ya registrados no se vuelven a generar.
+## Migración desde 1.0.9
 
-### Migración desde 1.0.9
-
-Los chunks existentes sin máscara nueva se consideran procesados para:
+Los chunks existentes sin máscara se consideran procesados para:
 
 ```yaml
 legacy-assumed-resources:
@@ -36,48 +69,11 @@ legacy-assumed-resources:
   - tronco_corrupto
 ```
 
-Por tanto, en esos chunks solo se tiran los recursos nuevos. Los chunks realmente nuevos comienzan con máscara vacía y tiran todos los recursos activos.
+En esos chunks solo se tiran Nimbrel, Oricalco, Mithril, Nudo Rúnico, Savia Áurea y Nudo Primordial. Los chunks nuevos tiran todos los recursos activos.
 
-La marca antigua `generated_chunk` se lee durante la migración y después se elimina, dejando únicamente la máscara compacta.
+## Protección
 
-### Recuperación de chunks aplazados
-
-Un chunk descargado antes de llegar a su turno:
-
-- no recibe ninguna marca falsa;
-- conserva sus bits pendientes;
-- vuelve a entrar en la cola cuando se carga de nuevo;
-- también puede recuperarse mediante el escaneo periódico de chunks cargados.
-
-La cola limita cuántas entradas descargadas descarta por tick, evitando picos cuando hay miles de entradas antiguas.
-
-### Protección ampliada
-
-Los recursos marcados están protegidos contra:
-
-- agua y lava;
-- cubetas vaciadas directamente;
-- físicas que romperían la cabeza;
-- explosiones de bloques y entidades;
-- pistones y pistones pegajosos;
-- destrucción indirecta del bloque que sostiene una cabeza de suelo o pared.
-
-Las cabezas decorativas normales no se modifican.
-
-## Estructura del proyecto
-
-El código fue dividido por responsabilidad:
-
-```text
-config/      carga y validación
-model/       definiciones inmutables
-tracking/    máscara por chunk
- generation/ cola y generadores
-listener/    rotura, chunks y protección
-service/     MMOItems, MMOCore y poder de herramientas
-command/     comandos administrativos
-api/event/   evento público de rotura
-```
+Los recursos marcados se protegen contra agua, lava, cubetas, físicas destructivas, explosiones, pistones y destrucción indirecta del soporte.
 
 ## Compilación
 
@@ -93,10 +89,10 @@ mvn -B clean package
 Resultado:
 
 ```text
-target/MDVHeadOres-1.1.0.jar
+target/MDVHeadOres-1.1.1.jar
 ```
 
-El flujo `.github/workflows/build.yml` compila automáticamente con Java 21.
+También incluye `.github/workflows/build.yml` para GitHub Actions.
 
 ## Comandos
 
@@ -105,6 +101,4 @@ El flujo `.github/workflows/build.yml` compila automáticamente con Java 21.
 - `/mdvheadores queue`
 - `/mdvheadores generate <radio> [force]`
 
-`inspect` muestra también cuántos bits de recursos están registrados en el chunk.
-
-Permiso: `mdvheadores.admin`.
+`queue` muestra cola principal, reintentos y progreso del escaneo incremental.

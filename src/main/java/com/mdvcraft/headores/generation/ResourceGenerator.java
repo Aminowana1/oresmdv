@@ -39,6 +39,9 @@ public final class ResourceGenerator {
     private static final BlockFace[] HORIZONTAL_FACES = {
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST
     };
+    private static final BlockFace[] NODE_AIR_CHECK_FACES = {
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP
+    };
     private static final BlockFace[] HEAD_ROTATIONS = {
             BlockFace.NORTH, BlockFace.NORTH_NORTH_EAST, BlockFace.NORTH_EAST,
             BlockFace.EAST_NORTH_EAST, BlockFace.EAST, BlockFace.EAST_SOUTH_EAST,
@@ -73,10 +76,12 @@ public final class ResourceGenerator {
         if (registry.allResources().isEmpty()) return new GenerationResult(0, 0, 0);
 
         long mask = settings.tracking().enabled() ? tracker.readMask(chunk) : 0L;
+        long originalMask = mask;
         int rolled = 0;
         int placed = 0;
         int failures = 0;
         String worldName = chunk.getWorld().getName();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
 
         for (ResourceDefinition resource : registry.allResources()) {
             if (!force && settings.tracking().enabled() && tracker.hasRolled(mask, resource.trackingMask())) {
@@ -88,13 +93,13 @@ public final class ResourceGenerator {
                 rolled++;
                 if (resource.isAllowedInWorld(worldName)) {
                     if (resource instanceof OreDefinition ore) {
-                        if (force || ThreadLocalRandom.current().nextDouble() <= ore.chunkChance()) {
+                        if (force || random.nextDouble() <= ore.chunkChance()) {
                             for (int i = 0; i < ore.veinsPerChunk(); i++) {
                                 placed += generateVein(chunk, ore, force);
                             }
                         }
                     } else if (resource instanceof TreeNodeDefinition node) {
-                        if (force || ThreadLocalRandom.current().nextDouble() <= node.chunkChance()) {
+                        if (force || random.nextDouble() <= node.chunkChance()) {
                             for (int i = 0; i < node.nodesPerChunk(); i++) {
                                 placed += generateTreeNode(chunk, node);
                             }
@@ -116,7 +121,9 @@ public final class ResourceGenerator {
             }
         }
 
-        tracker.writeMask(chunk, mask);
+        if (!settings.tracking().enabled() || mask != originalMask) {
+            tracker.writeMask(chunk, mask);
+        }
 
         if (settings.debug() && settings.debugLogGeneratedChunks() && (placed > 0 || fromCommand)) {
             plugin.getLogger().info("Chunk " + chunk.getX() + "," + chunk.getZ()
@@ -216,7 +223,7 @@ public final class ResourceGenerator {
 
     private boolean hasEnoughAirAroundNode(Block target) {
         int air = 0;
-        for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
+        for (BlockFace face : NODE_AIR_CHECK_FACES) {
             if (target.getRelative(face).getType().isAir()) air++;
         }
         return air >= 2;

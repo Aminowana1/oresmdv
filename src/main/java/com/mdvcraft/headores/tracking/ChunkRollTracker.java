@@ -73,8 +73,13 @@ public final class ChunkRollTracker {
             return !chunk.getPersistentDataContainer().has(
                     keys.legacyGeneratedChunkKey(), PersistentDataType.STRING);
         }
-        long mask = readMask(chunk);
-        return (mask & registry.activeMask()) != registry.activeMask();
+        return hasMissingActiveRolls(readMask(chunk));
+    }
+
+    public boolean hasMissingActiveRolls(long mask) {
+        if (!settings.tracking().enabled()) return true;
+        long active = registry.activeMask();
+        return (mask & active) != active;
     }
 
     public boolean hasRolled(long mask, long resourceMask) {

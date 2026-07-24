@@ -1,4 +1,4 @@
-# Pruebas recomendadas para MDVHeadOres 1.1.0
+# Pruebas recomendadas para MDVHeadOres 1.1.1
 
 ## 1. Compilación
 
@@ -6,61 +6,52 @@
 mvn -B clean package
 ```
 
-## 2. Migración de chunk existente
+## 2. Escaneo incremental con miles de chunks
 
-1. Instala 1.1.0 con la lista de recursos legados incluida.
-2. Carga un chunk que ya existía con 1.0.9.
-3. Usa `/mdvheadores inspect` dentro del chunk.
-4. Debe comenzar con los cinco bits legados y completar únicamente las tiradas nuevas.
-5. Al terminar debe mostrar todos los recursos activos registrados.
+1. Mantén cargados muchos chunks o usa varios jugadores de prueba.
+2. Ejecuta `/mdvheadores reload`.
+3. Consulta periódicamente `/mdvheadores queue`.
+4. `Escaneo incremental` debe aparecer activo y aumentar gradualmente.
+5. No debe procesar todos los chunks en un único tick.
+6. Un nuevo intervalo no debe crear un segundo escaneo si el anterior sigue activo.
 
-Con los bits de la configuración entregada:
+## 3. Chunk descargado en cola
 
-```text
-máscara legada: 199
-máscara completa: 2047
-```
+1. Aumenta temporalmente `delay-after-chunk-load-ticks`.
+2. Explora rápido y aléjate.
+3. `Retirados al descargar` debe aumentar.
+4. La cola no debe llenarse de miles de chunks ya descargados.
+5. Regresa al área: los chunks pendientes deben volver a entrar por su carga normal.
 
-## 3. Chunk nuevo
-
-1. Explora terreno nunca generado.
-2. El chunk debe tirar los 11 recursos activos una sola vez.
-3. Recárgalo varias veces y confirma que no aparecen copias nuevas.
-
-## 4. Chunk descargado antes de procesarse
-
-1. Usa un delay alto temporalmente.
-2. Teletranspórtate a terreno nuevo y aléjate antes de que la cola lo procese.
-3. El chunk debe contarse como aplazado, no como completado.
-4. Vuelve a cargarlo.
-5. Debe reingresar en la cola y completar sus tiradas pendientes.
-
-## 5. Cola llena
+## 4. Cola llena y reintentos
 
 1. Reduce temporalmente `max-queue-size`.
-2. Carga más chunks que el límite.
-3. Deja algunos chunks cargados.
-4. El escaneo periódico debe recuperarlos cuando haya espacio.
+2. Carga más chunks que el límite sin alejarte.
+3. `/mdvheadores queue` debe mostrar entradas en `Reintentos`.
+4. A medida que se libera la cola principal, `Recuperados` debe aumentar.
+5. No debe ser necesario esperar al escaneo de 60 segundos.
 
-## 6. Protección
+## 5. Presupuestos
 
-Probar sobre una veta y un nodo:
+Probar estos valores conservadores:
 
-- flujo de agua;
-- flujo de lava;
-- cubeta directa;
-- TNT;
-- creeper;
-- pistón empujando la cabeza;
-- pistón moviendo su bloque de soporte;
-- romper el bloque de soporte manualmente.
+```yaml
+rescan-loaded-chunks-per-tick: 128
+rescan-max-millis-per-tick: 1.0
+retry-chunks-per-tick: 64
+retry-max-millis-per-tick: 0.5
+max-processing-millis-per-run: 1.5
+max-dequeues-per-run: 16
+```
 
-La rotura normal con herramienta adecuada debe seguir funcionando y entregar drop/XP/evento.
+Usar Spark durante exploración y comprobar que MDVHeadOres no produce picos periódicos importantes.
 
-## 7. Recurso nuevo futuro
+## 6. Seguimiento
 
-1. Añade un recurso con un `tracking-bit` libre.
-2. No lo añadas a `legacy-assumed-resources`.
-3. Recarga el plugin.
-4. Un chunk ya completado debe tirar solo ese recurso nuevo.
-5. Una segunda carga no debe repetir la tirada.
+- Chunk legado: máscara inicial `199`, luego `2047` al completar los seis recursos nuevos.
+- Chunk nuevo: comienza en `0` y termina en `2047`.
+- Un chunk descargado antes de procesarse no debe recibir bits falsos.
+
+## 7. Protecciones
+
+Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucción del soporte.

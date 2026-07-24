@@ -1,6 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.1.0: seguimiento económico por recurso, recuperación de chunks aplazados y protección ampliada.
+# v1.1.1: escaneo incremental, reintentos compactos y cola sensible a descargas para exploración masiva.
 
 debug: false
 
@@ -65,16 +65,38 @@ no-axe-power-message: "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficie
 generation-throttle:
   enabled: true
   delay-after-chunk-load-ticks: 40
-  interval-ticks: 6
-  chunks-per-interval: 1
+  # Worker cada tick. El límite temporal evita que consuma el tick completo.
+  interval-ticks: 1
+  # Techo de catch-up; normalmente el presupuesto de 1.5 ms corta antes.
+  chunks-per-interval: 8
   max-queue-size: 15000
   skip-if-queue-full: true
   command-generate-uses-queue: true
 
-  # Revisa periódicamente chunks que siguen cargados pero quedaron fuera de la cola.
-  # También recupera automáticamente los rechazados por cola llena.
-  # 1200 ticks = 60 segundos.
+  # Inicia una auditoría de los chunks cargados cada 1200 ticks (60 segundos).
+  # La auditoría NO recorre todo en un mismo tick: se divide en lotes pequeños.
   rescan-loaded-chunks-interval-ticks: 1200
+
+  # Máximo de chunks revisados por tick durante una auditoría.
+  # 128 permite revisar unos 2560 chunks por segundo como techo teórico.
+  rescan-loaded-chunks-per-tick: 128
+
+  # Presupuesto temporal máximo del escaneo por tick. Al alcanzar este tiempo,
+  # continúa en el tick siguiente aunque no haya llegado a 128 chunks.
+  rescan-max-millis-per-tick: 1.0
+
+  # Los chunks rechazados por cola llena entran en una cola compacta de reintentos.
+  # Se revisan en lotes y sin escanear todos los chunks cargados.
+  retry-chunks-per-tick: 64
+  retry-max-millis-per-tick: 0.5
+  max-retry-size: 30000
+
+  # Presupuesto de la cola principal por ejecución. Siempre puede completar el
+  # primer chunk iniciado, pero no comienza más trabajo si agotó el presupuesto.
+  max-processing-millis-per-run: 1.5
+
+  # Límite de entradas extraídas por ejecución, incluso si estaban descargadas.
+  max-dequeues-per-run: 16
   
 resource-protection:
   prevent-fluid-destruction: true

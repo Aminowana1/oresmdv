@@ -42,12 +42,19 @@ public record PluginSettings(
         GenerationThrottle throttle = new GenerationThrottle(
                 cfg.getBoolean("generation-throttle.enabled", true),
                 Math.max(0, cfg.getInt("generation-throttle.delay-after-chunk-load-ticks", 40)),
-                Math.max(1, cfg.getInt("generation-throttle.interval-ticks", 6)),
-                Math.max(1, cfg.getInt("generation-throttle.chunks-per-interval", 1)),
+                Math.max(1, cfg.getInt("generation-throttle.interval-ticks", 1)),
+                Math.max(1, cfg.getInt("generation-throttle.chunks-per-interval", 8)),
                 Math.max(64, cfg.getInt("generation-throttle.max-queue-size", 15000)),
                 cfg.getBoolean("generation-throttle.skip-if-queue-full", true),
                 cfg.getBoolean("generation-throttle.command-generate-uses-queue", true),
-                Math.max(0, cfg.getInt("generation-throttle.rescan-loaded-chunks-interval-ticks", 1200))
+                Math.max(0, cfg.getInt("generation-throttle.rescan-loaded-chunks-interval-ticks", 1200)),
+                Math.max(1, cfg.getInt("generation-throttle.rescan-loaded-chunks-per-tick", 128)),
+                positiveDouble(cfg.getDouble("generation-throttle.rescan-max-millis-per-tick", 1.0D), 1.0D),
+                Math.max(1, cfg.getInt("generation-throttle.retry-chunks-per-tick", 64)),
+                positiveDouble(cfg.getDouble("generation-throttle.retry-max-millis-per-tick", 0.5D), 0.5D),
+                positiveDouble(cfg.getDouble("generation-throttle.max-processing-millis-per-run", 1.5D), 1.5D),
+                Math.max(1, cfg.getInt("generation-throttle.max-dequeues-per-run", 16)),
+                Math.max(64, cfg.getInt("generation-throttle.max-retry-size", 30000))
         );
 
         ResourceProtection protection = new ResourceProtection(
@@ -83,6 +90,11 @@ public record PluginSettings(
         );
     }
 
+    private static double positiveDouble(double value, double fallback) {
+        if (!Double.isFinite(value) || value <= 0.0D) return fallback;
+        return value;
+    }
+
     public record GenerationThrottle(
             boolean enabled,
             int delayAfterChunkLoadTicks,
@@ -91,7 +103,14 @@ public record PluginSettings(
             int maxQueueSize,
             boolean skipIfQueueFull,
             boolean commandGenerateUsesQueue,
-            int rescanLoadedChunksIntervalTicks
+            int rescanLoadedChunksIntervalTicks,
+            int rescanLoadedChunksPerTick,
+            double rescanMaxMillisPerTick,
+            int retryChunksPerTick,
+            double retryMaxMillisPerTick,
+            double maxProcessingMillisPerRun,
+            int maxDequeuesPerRun,
+            int maxRetrySize
     ) {}
 
     public record ResourceProtection(

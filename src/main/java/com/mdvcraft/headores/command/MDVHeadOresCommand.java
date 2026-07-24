@@ -98,12 +98,21 @@ public final class MDVHeadOresCommand implements CommandExecutor {
         sender.sendMessage(PREFIX + "§dEstado de generación MDVHeadOres");
         sender.sendMessage("§7Throttle: " + (snapshot.throttleEnabled() ? "§aON" : "§cOFF")
                 + " §8| §7Cola: §f" + snapshot.queued() + "§7/§f" + snapshot.maxQueueSize()
+                + " §8| §7Reintentos: §f" + snapshot.retryQueued() + "§7/§f" + snapshot.maxRetrySize()
                 + " §8| §7Listos: §f" + snapshot.ready());
         sender.sendMessage("§7Procesados: §a" + snapshot.processedTotal()
                 + " §8| §7Encolados: §e" + snapshot.queuedTotal()
-                + " §8| §7Aplazados descargados: §6" + snapshot.deferredUnloadedTotal()
-                + " §8| §7Cola llena: §c" + snapshot.skippedQueueFullTotal());
+                + " §8| §7Recuperados: §b" + snapshot.retriedTotal()
+                + " §8| §7Retirados al descargar: §6" + snapshot.cancelledOnUnloadTotal());
+        sender.sendMessage("§7Carreras descargadas: §6" + snapshot.deferredUnloadedTotal()
+                + " §8| §7Cola llena: §c" + snapshot.skippedQueueFullTotal()
+                + " §8| §7Reintentos descartados por límite: §c" + snapshot.retryDroppedTotal());
         sender.sendMessage("§7Chunks migrados al esquema por recurso: §f" + snapshot.migratedChunks());
+        sender.sendMessage("§7Escaneo incremental: " + (snapshot.scanActive() ? "§aACTIVO" : "§7inactivo")
+                + " §8| §7Actual: §f" + snapshot.currentScanChecked()
+                + " §8| §7Pendientes vistos: §e" + snapshot.currentScanMissing()
+                + " §8| §7Completados: §f" + snapshot.scansCompletedTotal()
+                + "§7/§f" + snapshot.scansStartedTotal());
 
         if (snapshot.queued() > 0) {
             sender.sendMessage("§7Primer chunk listo en: §f" + FormatUtil.duration(snapshot.firstReadyInMillis() / 1000L)

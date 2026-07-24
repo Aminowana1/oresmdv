@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.1
+
+- Sustituye el escaneo completo en un solo tick por una auditoría incremental con límite de chunks y milisegundos por tick.
+- Añade una cola compacta de reintentos para chunks rechazados por cola llena.
+- Retira en O(1) las entradas de chunks descargados mediante `ChunkUnloadEvent`.
+- Evita acumular miles de entradas muertas durante teletransportes o exploración rápida.
+- Añade presupuesto temporal y límite de extracciones para la cola principal.
+- Evita escaneos solapados y reporta sus estadísticas en `/mdvheadores queue`.
+- Limita avisos de cola llena para impedir spam de consola.
+- Reduce lecturas PDC duplicadas durante carga, escaneo y encolado.
+- Evita escrituras de máscara cuando no cambió.
+- Elimina pequeñas asignaciones repetidas en generación de nodos y protección de soportes.
+
 ## 1.1.0
 
 - Sustituye la marca global de chunk por una máscara `LONG` con un bit por recurso.
