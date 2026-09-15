@@ -1,4 +1,4 @@
-# MDVHeadOres 1.3.2
+# MDVHeadOres 1.3.5
 
 Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha, experiencia opcional de MMOCore y seguimiento compacto por chunk.
 
@@ -105,7 +105,7 @@ mvn -B clean package
 Resultado:
 
 ```text
-target/MDVHeadOres-1.3.2.jar
+target/MDVHeadOres-1.3.5.jar
 ```
 
 También incluye `.github/workflows/build.yml` para GitHub Actions.
@@ -132,4 +132,11 @@ También incluye `.github/workflows/build.yml` para GitHub Actions.
 
 - `loot spawn` coloca un loot node exacto en la posición del administrador sin gastar la tirada/tracking del chunk.
 - `head` entrega una cabeza colocable. Al ponerla en el mundo queda marcada como la misma veta/nodo que generaría MDVHeadOres naturalmente.
-- El equipamiento MMOItems generado como loot se tira desde el template para obtener modifiers aleatorios y luego se entrega no identificado.
+- El equipamiento MMOItems generado como loot se tira desde el template para obtener modifiers aleatorios. Solo los tipos configurados en `loot-nodes.mmoitems.unidentified.types` se entregan no identificados.
+
+
+## 1.3.5
+
+- Whitelist configurable de tipos MMOItems que salen no identificados.
+- Reparto de cantidades para aprovechar `max-slots` y dispersar visualmente el loot.
+- La lógica nueva ocurre al generar el contenido del contenedor; no añade trabajo a la generación de chunks.

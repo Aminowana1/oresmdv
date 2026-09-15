@@ -1,5 +1,7 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
+# v1.3.5: whitelist configurable de categorías MMOItems sin identificar y
+# reparto de cantidades para aprovechar max-slots en inventarios de loot.
 # v1.3.4: bolsas rompibles con drop de loot; bolsas vacías desaparecen;
 # cofres/barriles/vasijas vacíos permanecen sin mensajes.
 # v1.3.1: editor paginado de loot nodes y soporte completo para libros encantados/vanilla con metadata.
@@ -750,6 +752,30 @@ loot-nodes:
   enabled: true
   directory: "lootnodes"
   legacy-file: "lootnodes.yml"
+
+  # MMOItems de loot nodes:
+  # - Los modifiers aleatorios de equipamiento siguen funcionando.
+  # - SOLO los tipos listados aquí (o sus subtipos/hijos) salen sin identificar.
+  # - CONSUMABLE, MATERIAL, PERGAMINO, LLAVE, etc. quedan identificados si no se listan.
+  # - enabled: false hace que TODOS los MMOItems salgan identificados.
+  # - types: [] también deja todos identificados manteniendo enabled: true.
+  mmoitems:
+    unidentified:
+      enabled: true
+      types:
+        - SWORD
+        - DAGGER
+        - SPEAR
+        - HAMMER
+        - GAUNTLET
+        - WHIP
+        - STAFF
+        - BOW
+        - CROSSBOW
+        - ARMOR
+        - TOOL
+        - ARMAS_MAGICAS
+        - SOPORTE_MAGICO
 
   # /mdvheadores loot editor <id>
   editor:

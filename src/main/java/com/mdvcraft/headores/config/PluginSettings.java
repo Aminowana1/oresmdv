@@ -5,7 +5,9 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public record PluginSettings(
@@ -76,12 +78,36 @@ public record PluginSettings(
 
         String legacyLootFile = cfg.getString("loot-nodes.legacy-file",
                 cfg.getString("loot-nodes.file", "lootnodes.yml"));
+
+        // Compatibilidad 1.3.4: si la lista todavía no existe, conserva el
+        // comportamiento anterior (equipamiento no identificado). En cuanto
+        // el administrador define `types`, incluso una lista vacía se respeta.
+        Set<String> defaultUnidentifiedTypes = Set.of(
+                "SWORD", "DAGGER", "HAMMER", "BOW", "CROSSBOW", "SPEAR", "GAUNTLET", "WHIP",
+                "STAFF", "WAND", "TOME", "LUTE", "MUSKET", "GREATSWORD", "LONG_SWORD", "KATANA",
+                "THRUSTING_SWORD", "AXE", "GREATAXE", "HALBERD", "LANCE", "GREATHAMMER", "GREATSTAFF",
+                "STAVE", "GREATBOW", "SHIELD", "ARMOR", "TOOL", "ACCESSORY", "ORNAMENT", "RING",
+                "AMULET", "AMULETO", "BRACELET", "GLOVES", "ARTIFACT", "CATALYST", "OFF_CATALYST",
+                "MAIN_CATALYST", "ARMAS_MAGICAS", "SOPORTE_MAGICO"
+        );
+        Set<String> unidentifiedTypes = new LinkedHashSet<>();
+        if (cfg.isSet("loot-nodes.mmoitems.unidentified.types")) {
+            for (String raw : cfg.getStringList("loot-nodes.mmoitems.unidentified.types")) {
+                if (raw == null || raw.isBlank()) continue;
+                unidentifiedTypes.add(raw.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_'));
+            }
+        } else {
+            unidentifiedTypes.addAll(defaultUnidentifiedTypes);
+        }
+
         LootNodesSettings lootNodes = new LootNodesSettings(
                 cfg.getBoolean("loot-nodes.enabled", true),
                 cfg.getString("loot-nodes.directory", "lootnodes"),
                 legacyLootFile,
                 cfg.getBoolean("loot-nodes.editor.enabled", true),
-                Math.max(1, Math.min(45, cfg.getInt("loot-nodes.editor.rewards-per-page", 45)))
+                Math.max(1, Math.min(45, cfg.getInt("loot-nodes.editor.rewards-per-page", 45))),
+                cfg.getBoolean("loot-nodes.mmoitems.unidentified.enabled", true),
+                Set.copyOf(unidentifiedTypes)
         );
 
         ChunkyCompatibility chunky = new ChunkyCompatibility(
@@ -137,8 +163,15 @@ public record PluginSettings(
             String directoryName,
             String legacyFileName,
             boolean editorEnabled,
-            int editorRewardsPerPage
-    ) {}
+            int editorRewardsPerPage,
+            boolean mmoItemsUnidentifiedEnabled,
+            Set<String> mmoItemsUnidentifiedTypes
+    ) {
+        public LootNodesSettings {
+            mmoItemsUnidentifiedTypes = Set.copyOf(
+                    mmoItemsUnidentifiedTypes == null ? Set.of() : mmoItemsUnidentifiedTypes);
+        }
+    }
 
     public record ChunkyCompatibility(
             boolean enabled,

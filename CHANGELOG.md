@@ -1,3 +1,14 @@
+# MDVHeadOres 1.3.5
+
+- Los MMOItems de loot nodes ya no se fuerzan todos a no identificados.
+- Nueva whitelist global `loot-nodes.mmoitems.unidentified.types`; solo esos tipos (o hijos de un tipo configurado) salen sin identificar.
+- `enabled: false` o `types: []` permiten desactivar completamente el no-identificado en loot nodes.
+- El equipamiento sigue generándose desde templates para conservar modifiers aleatorios aunque salga identificado.
+- Las cantidades de loot ahora se conservan como cantidades lógicas antes de construir los stacks, evitando truncar prematuramente cantidades grandes.
+- Los inventarios reparten las cantidades entre tantos slots como sea posible hasta `max-slots`.
+- Ejemplo: HILO x10 + 4 premios de una unidad con `max-slots: 12` = 8 slots de hilo + 4 slots de otras recompensas, colocados en posiciones aleatorias.
+- No cambia la generación de chunks, tracking, Chunky ni la cola/throttle.
+
 # MDVHeadOres 1.3.4
 
 - PLAYER_HEAD: click derecho sobre una bolsa sin loot válido la elimina silenciosamente.

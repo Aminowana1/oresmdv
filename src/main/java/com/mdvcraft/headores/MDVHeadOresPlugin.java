@@ -57,7 +57,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
-        getLogger().info("MDVHeadOres 1.3.4 activado. Vetas: " + registry.ores().size()
+        getLogger().info("MDVHeadOres 1.3.5 activado. Vetas: " + registry.ores().size()
                 + ", nodos: " + registry.treeNodes().size()
                 + ", loot nodes activos: " + lootNodeRegistry.activeNodes().size()
                 + "/" + lootNodeRegistry.allNodes().size()
@@ -89,7 +89,11 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
         ToolPowerService toolPower = new ToolPowerService(this, settings);
         MmoItemsBridge mmoItems = new MmoItemsBridge(this, settings.debug());
         MmoCoreBridge mmoCore = new MmoCoreBridge(settings);
-        LootItemResolver lootResolver = new LootItemResolver(this, settings.debug());
+        LootItemResolver lootResolver = new LootItemResolver(
+                this,
+                settings.debug(),
+                settings.lootNodes().mmoItemsUnidentifiedEnabled(),
+                settings.lootNodes().mmoItemsUnidentifiedTypes());
         LootTableService lootTables = new LootTableService(lootResolver);
         lootNodeService = new LootNodeService(this, keys, lootNodeRegistry, lootTables);
         lootEditor = new LootEditorManager(lootNodeRegistry, lootResolver, settings.lootNodes().editorRewardsPerPage());

@@ -21,10 +21,27 @@ public final class MmoItemsBridge {
 
     private final JavaPlugin plugin;
     private final boolean debug;
+    private final boolean lootUnidentifiedEnabled;
+    private final Set<String> lootUnidentifiedTypes;
 
     public MmoItemsBridge(JavaPlugin plugin, boolean debug) {
+        this(plugin, debug, false, Set.of());
+    }
+
+    public MmoItemsBridge(JavaPlugin plugin, boolean debug, boolean lootUnidentifiedEnabled, Set<String> lootUnidentifiedTypes) {
         this.plugin = plugin;
         this.debug = debug;
+        this.lootUnidentifiedEnabled = lootUnidentifiedEnabled;
+        if (lootUnidentifiedTypes == null || lootUnidentifiedTypes.isEmpty()) {
+            this.lootUnidentifiedTypes = Set.of();
+        } else {
+            java.util.LinkedHashSet<String> normalized = new java.util.LinkedHashSet<>();
+            for (String raw : lootUnidentifiedTypes) {
+                String id = normalizeId(raw);
+                if (!id.isBlank()) normalized.add(id);
+            }
+            this.lootUnidentifiedTypes = Set.copyOf(normalized);
+        }
     }
 
     /** Construcción normal, usada por drops de recursos y previews del editor. */
@@ -62,9 +79,10 @@ public final class MmoItemsBridge {
     }
 
     /**
-     * Construcción exclusiva de loot nodes. El equipamiento se genera desde el
-     * template para que MMOItems tire sus modifiers aleatorios y luego se vuelve
-     * no identificado, preservando dentro del objeto la versión ya aleatorizada.
+     * Construcción exclusiva de loot nodes. El equipamiento sigue generándose
+     * desde el template para conservar modifiers aleatorios, pero solo se vuelve
+     * no identificado cuando su categoría (o una categoría padre) está incluida
+     * en la whitelist de config.yml.
      */
     public ItemStack buildLootItem(String typeId, String itemId, int amount) {
         try {
@@ -76,31 +94,63 @@ public final class MmoItemsBridge {
             Object type = getType(typeClass, typeId);
             if (type == null) return null;
 
-            if (!isEquipmentType(type, typeId)) {
-                return buildItem(typeId, itemId, amount);
-            }
-
-            ItemStack randomized = buildRandomizedFromTemplate(mmoItemsPlugin, type, itemId);
-            if (randomized == null) {
-                debug("No pude generar la tirada aleatoria de equipamiento " + typeId + ":" + itemId,
-                        new IllegalStateException("MMOItemTemplate no produjo un item"));
-                return null;
-            }
-
-            ItemStack unidentified = buildUnidentified(type, randomized);
-            if (unidentified == null) {
-                if (debug) {
-                    plugin.getLogger().warning("Se rechazó el loot de equipamiento " + typeId + ":" + itemId
-                            + " porque MMOItems no pudo convertirlo a no identificado.");
+            ItemStack built;
+            if (isEquipmentType(type, typeId)) {
+                built = buildRandomizedFromTemplate(mmoItemsPlugin, type, itemId);
+                if (built == null) {
+                    debug("No pude generar la tirada aleatoria de equipamiento " + typeId + ":" + itemId,
+                            new IllegalStateException("MMOItemTemplate no produjo un item"));
+                    return null;
                 }
-                return null;
+            } else {
+                built = buildItem(typeId, itemId, 1);
+                if (built == null) return null;
             }
-            unidentified.setAmount(Math.max(1, amount));
-            return unidentified;
+
+            if (shouldBeUnidentified(type, typeId)) {
+                ItemStack unidentified = buildUnidentified(type, built);
+                if (unidentified != null) {
+                    built = unidentified;
+                } else if (debug) {
+                    plugin.getLogger().warning("No pude convertir a no identificado " + typeId + ":" + itemId
+                            + "; se entregará identificado para no perder la recompensa.");
+                }
+            }
+
+            built.setAmount(Math.max(1, amount));
+            return built;
         } catch (Throwable throwable) {
-            debug("Error generando loot MMOItems aleatorio/no identificado " + typeId + ":" + itemId, throwable);
+            debug("Error generando loot MMOItems " + typeId + ":" + itemId, throwable);
             return null;
         }
+    }
+
+    private boolean shouldBeUnidentified(Object type, String typeId) {
+        if (!lootUnidentifiedEnabled || lootUnidentifiedTypes.isEmpty()) return false;
+
+        String direct = normalizeId(typeId);
+        if (lootUnidentifiedTypes.contains(direct)) return true;
+
+        // Permite configurar una categoría padre. Ej.: ARMOR también cubre
+        // ARMADURAAMINOWANA; SWORD cubre AXE/GREATSWORD si MMOItems los expone
+        // mediante su jerarquía de Type. Se limita la profundidad por seguridad.
+        Object cursor = type;
+        for (int depth = 0; cursor != null && depth < 12; depth++) {
+            Object id = invokeNoArg(cursor, "getId");
+            if (!(id instanceof String)) id = invokeNoArg(cursor, "getID");
+            if (!(id instanceof String)) id = invokeNoArg(cursor, "getName");
+            if (id instanceof String string && lootUnidentifiedTypes.contains(normalizeId(string))) return true;
+
+            Object next = invokeNoArg(cursor, "getSupertype");
+            if (next == null) next = invokeNoArg(cursor, "getParent");
+            if (next instanceof String string) {
+                if (lootUnidentifiedTypes.contains(normalizeId(string))) return true;
+                break;
+            }
+            if (next == cursor) break;
+            cursor = next;
+        }
+        return false;
     }
 
     private ItemStack buildRandomizedFromTemplate(Object mmoItemsPlugin, Object type, String itemId) {

@@ -1,0 +1,20 @@
+# Añadir dentro de la sección existente `loot-nodes:` de config.yml
+# (al mismo nivel que `editor:`).
+
+mmoitems:
+  unidentified:
+    enabled: true
+    types:
+      - SWORD
+      - DAGGER
+      - SPEAR
+      - HAMMER
+      - GAUNTLET
+      - WHIP
+      - STAFF
+      - BOW
+      - CROSSBOW
+      - ARMOR
+      - TOOL
+      - ARMAS_MAGICAS
+      - SOPORTE_MAGICO

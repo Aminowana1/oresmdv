@@ -1,4 +1,4 @@
-# Loot Nodes — MDVHeadOres 1.3.4
+# Loot Nodes — MDVHeadOres 1.3.5
 
 ## Tipos de contenedor
 
@@ -30,7 +30,9 @@ loot:
   entries: {}
 ```
 
-`rolls` decide cuántas selecciones intenta hacer. `max-slots` limita cuántos stacks distintos puede producir. `merge-same-items` intenta fusionar resultados iguales antes de ocupar otro slot.
+`rolls` decide cuántas selecciones intenta hacer. `max-slots` es el máximo de slots que el loot intentará ocupar. Desde 1.3.5, después de resolver las recompensas, las cantidades se reparten para aprovechar tantos slots como sea posible hasta ese límite. Por ejemplo, HILO x10 + cuatro premios de una unidad con `max-slots: 12` usa 8 slots para el hilo y 4 para los otros premios. Los slots finales se barajan antes de insertarse en el inventario.
+
+`merge-same-items` controla si tiradas idénticas se suman primero como una misma recompensa lógica; incluso si se fusionan, la cantidad resultante puede volver a separarse físicamente en varios slots durante la distribución.
 
 Las vasijas fuerzan internamente `rolls: 1/1` y `max-slots: 1`.
 
@@ -91,11 +93,11 @@ El loot es compartido entre jugadores. Un contenedor abierto no vuelve a tirar s
 
 Lo coloca exactamente en el bloque donde están los pies del jugador. Debe existir un bloque sólido debajo y el espacio debe ser válido para el tipo de contenedor. Esta colocación administrativa no altera el tracking del chunk.
 
-### Equipamiento MMOItems
+### MMOItems: modifiers y no-identificado
 
-Cuando una entrada `MMOITEM` corresponde a equipamiento, MDVHeadOres genera una instancia real del template para que MMOItems aplique sus modifiers aleatorios. Después la convierte a no identificada antes de introducirla en el contenedor.
+Cuando una entrada `MMOITEM` corresponde a equipamiento, MDVHeadOres genera una instancia real del template para que MMOItems aplique sus modifiers aleatorios. Esa parte sigue siendo independiente del estado identificado/no identificado.
 
-El item que el jugador identifica más tarde conserva la tirada generada al abrir/romper el loot node. Los materiales y consumibles MMOItems no se fuerzan a no identificados.
+Desde 1.3.5, solo los tipos configurados en `loot-nodes.mmoitems.unidentified.types` (o sus tipos padre configurados) se convierten a no identificados. Los demás se entregan identificados. Por ejemplo, si `CONSUMABLE` no aparece en la lista, las pociones/comidas MMOItems salen identificadas aunque el equipamiento siga teniendo modifiers aleatorios.
 
 ## Editor paginado y vanilla con metadata (1.3.1)
 
@@ -129,3 +131,24 @@ El PDC se persiste antes de insertar los premios y luego se reaccede al inventar
 - `PLAYER_HEAD`: click derecho abre el inventario; si no hay loot válido, desaparece. Al romperla, suelta el loot restante y nunca dropea la cabeza.
 - `CHEST` / `BARREL`: permanecen aunque estén vacíos.
 - `DECORATED_POT`: permanece después de reclamar; si no hay premio válido, el click no hace nada. Solo desaparece al romperse.
+
+
+## 1.3.5 - Distribución y categorías no identificadas
+
+```yaml
+loot-nodes:
+  mmoitems:
+    unidentified:
+      enabled: true
+      types:
+        - SWORD
+        - DAGGER
+        - ARMOR
+        - ARMAS_MAGICAS
+```
+
+- `enabled: false`: todos los MMOItems salen identificados.
+- `types: []`: también deja todos identificados.
+- Los nombres se comparan sin distinguir mayúsculas/minúsculas.
+- Si MMOItems expone jerarquía de tipos, una categoría padre también cubre sus hijos/subtipos.
+- El preview del editor sigue siendo normal/identificado.

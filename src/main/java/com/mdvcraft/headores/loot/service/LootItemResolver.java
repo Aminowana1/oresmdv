@@ -8,6 +8,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Method;
 import java.util.Locale;
+import java.util.Set;
 
 public final class LootItemResolver {
     private final JavaPlugin plugin;
@@ -16,9 +17,13 @@ public final class LootItemResolver {
     private final boolean debug;
 
     public LootItemResolver(JavaPlugin plugin, boolean debug) {
+        this(plugin, debug, false, Set.of());
+    }
+
+    public LootItemResolver(JavaPlugin plugin, boolean debug, boolean unidentifiedEnabled, Set<String> unidentifiedTypes) {
         this.plugin = plugin;
         this.debug = debug;
-        this.mmoItems = new MmoItemsBridge(plugin, debug);
+        this.mmoItems = new MmoItemsBridge(plugin, debug, unidentifiedEnabled, unidentifiedTypes);
         this.mythicItems = new MythicItemsBridge(plugin, debug);
     }
 
