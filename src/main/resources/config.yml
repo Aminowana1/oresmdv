@@ -1,6 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.1.1: escaneo incremental, reintentos compactos y cola sensible a descargas para exploración masiva.
+# v1.2.0: añade loot nodes diferidos, editor de botín y compatibilidad con pregeneración/Chunky.
 
 debug: false
 
@@ -737,3 +737,22 @@ tree-nodes:
 
     break-sound: "BLOCK_WOOD_BREAK"
     fail-sound: "BLOCK_NOTE_BLOCK_BASS"
+
+# ==========================================================
+# LOOT NODES - cofres, barriles, bolsas/cabezas y vasijas
+# Las definiciones individuales viven en lootnodes.yml.
+# ==========================================================
+loot-nodes:
+  enabled: true
+  file: "lootnodes.yml"
+
+  # /mdvheadores loot editor <id>
+  editor:
+    enabled: true
+
+# Compatibilidad global con pregeneradores como Chunky.
+# Afecta vetas, nodos de árboles y loot nodes por igual.
+# ChunkPopulateEvent entra a LA MISMA cola con deduplicación y throttle.
+chunky-compatibility:
+  enabled: true
+  listen-chunk-populate: true

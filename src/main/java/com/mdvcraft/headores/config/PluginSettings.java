@@ -22,7 +22,9 @@ public record PluginSettings(
         String noAxePowerMessage,
         GenerationThrottle throttle,
         ResourceProtection protection,
-        GenerationTracking tracking
+        GenerationTracking tracking,
+        LootNodesSettings lootNodes,
+        ChunkyCompatibility chunky
 ) {
     public static PluginSettings load(JavaPlugin plugin) {
         FileConfiguration cfg = plugin.getConfig();
@@ -72,6 +74,17 @@ public record PluginSettings(
                 List.copyOf(cfg.getStringList("generation-tracking.legacy-assumed-resources"))
         );
 
+        LootNodesSettings lootNodes = new LootNodesSettings(
+                cfg.getBoolean("loot-nodes.enabled", true),
+                cfg.getString("loot-nodes.file", "lootnodes.yml"),
+                cfg.getBoolean("loot-nodes.editor.enabled", true)
+        );
+
+        ChunkyCompatibility chunky = new ChunkyCompatibility(
+                cfg.getBoolean("chunky-compatibility.enabled", true),
+                cfg.getBoolean("chunky-compatibility.listen-chunk-populate", true)
+        );
+
         return new PluginSettings(
                 cfg.getBoolean("debug", false),
                 cfg.getBoolean("debug-options.log-generated-chunks", true),
@@ -86,7 +99,9 @@ public record PluginSettings(
                 cfg.getString("no-axe-power-message", "&6&l[&5&lMDVCRAFT&6&l]  &4»  &cTu hacha no tiene suficiente poder para extraer este recurso. &7Requiere: &f%required%&7. Tu poder: &f%power%&c."),
                 throttle,
                 protection,
-                tracking
+                tracking,
+                lootNodes,
+                chunky
         );
     }
 
@@ -111,6 +126,17 @@ public record PluginSettings(
             double maxProcessingMillisPerRun,
             int maxDequeuesPerRun,
             int maxRetrySize
+    ) {}
+
+    public record LootNodesSettings(
+            boolean enabled,
+            String fileName,
+            boolean editorEnabled
+    ) {}
+
+    public record ChunkyCompatibility(
+            boolean enabled,
+            boolean listenChunkPopulate
     ) {}
 
     public record ResourceProtection(

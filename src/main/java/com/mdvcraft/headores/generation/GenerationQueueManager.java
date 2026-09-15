@@ -141,6 +141,30 @@ public final class GenerationQueueManager {
         }
     }
 
+
+    /**
+     * Compatibilidad con pregeneradores como Chunky. ChunkPopulateEvent puede llegar en
+     * rutas de generación donde queremos asegurar el alta en la misma cola principal.
+     * La deduplicación de enqueuePrepared evita trabajo doble si ChunkLoadEvent ya lo hizo.
+     */
+    public void handleChunkPopulate(Chunk chunk) {
+        if (!settings.chunky().enabled() || !settings.chunky().listenChunkPopulate()) return;
+        long mask = tracker.prepareChunk(chunk, true);
+        if (!tracker.hasMissingActiveRolls(mask)) return;
+        if (settings.throttle().enabled()) {
+            enqueuePrepared(chunk, mask, false, false, true);
+            // El chunk ya terminó de poblarse: lo promovemos a listo sin saltarnos
+            // el worker, el presupuesto temporal ni la deduplicación. Esto ayuda a
+            // que pregeneradores rápidos como Chunky no descarguen el chunk antes.
+            ChunkKey key = ChunkKey.of(chunk);
+            PendingChunk pending = queue.get(key);
+            if (pending != null) queue.put(key, pending.readyNow());
+        } else {
+            generator.generate(chunk, false, false);
+            processedTotal++;
+        }
+    }
+
     /**
      * Retira inmediatamente de memoria las entradas de chunks descargados. En la próxima
      * carga, ChunkLoadEvent volverá a encolarlos porque sus bits pendientes no se marcaron.
@@ -507,6 +531,10 @@ public final class GenerationQueueManager {
                     enqueuedAtNanos,
                     readyAtNanos
             );
+        }
+
+        PendingChunk readyNow() {
+            return new PendingChunk(worldName, force, fromCommand, enqueuedAtNanos, System.nanoTime());
         }
     }
 

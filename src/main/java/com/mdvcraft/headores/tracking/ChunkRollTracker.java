@@ -2,6 +2,7 @@ package com.mdvcraft.headores.tracking;
 
 import com.mdvcraft.headores.config.PluginSettings;
 import com.mdvcraft.headores.config.ResourceRegistry;
+import com.mdvcraft.headores.loot.config.LootNodeRegistry;
 import org.bukkit.Chunk;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -12,6 +13,8 @@ public final class ChunkRollTracker {
     private final ResourceKeys keys;
     private final PluginSettings settings;
     private final ResourceRegistry registry;
+    private final LootNodeRegistry lootNodes;
+    private final long activeMask;
     private final long legacyAssumedMask;
     private long migratedChunks;
 
@@ -19,12 +22,15 @@ public final class ChunkRollTracker {
             JavaPlugin plugin,
             ResourceKeys keys,
             PluginSettings settings,
-            ResourceRegistry registry
+            ResourceRegistry registry,
+            LootNodeRegistry lootNodes
     ) {
         this.plugin = plugin;
         this.keys = keys;
         this.settings = settings;
         this.registry = registry;
+        this.lootNodes = lootNodes;
+        this.activeMask = registry.activeMask() | (lootNodes == null ? 0L : lootNodes.activeMask());
         this.legacyAssumedMask = registry.maskForResourceKeys(
                 settings.tracking().legacyAssumedResources(), plugin);
     }
@@ -78,8 +84,7 @@ public final class ChunkRollTracker {
 
     public boolean hasMissingActiveRolls(long mask) {
         if (!settings.tracking().enabled()) return true;
-        long active = registry.activeMask();
-        return (mask & active) != active;
+        return (mask & activeMask) != activeMask;
     }
 
     public boolean hasRolled(long mask, long resourceMask) {
@@ -91,7 +96,7 @@ public final class ChunkRollTracker {
     }
 
     public long activeMask() {
-        return registry.activeMask();
+        return activeMask;
     }
 
     public long legacyAssumedMask() {
@@ -103,10 +108,10 @@ public final class ChunkRollTracker {
     }
 
     public int completedResourceCount(long mask) {
-        return Long.bitCount(mask & registry.activeMask());
+        return Long.bitCount(mask & activeMask);
     }
 
     public int activeResourceCount() {
-        return Long.bitCount(registry.activeMask());
+        return Long.bitCount(activeMask);
     }
 }

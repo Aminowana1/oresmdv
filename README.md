@@ -1,8 +1,24 @@
-# MDVHeadOres 1.1.1
+# MDVHeadOres 1.2.0
 
 Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha, experiencia opcional de MMOCore y seguimiento compacto por chunk.
 
-## Rendimiento de 1.1.1
+Desde 1.2.0 incorpora **loot nodes** configurados en `lootnodes.yml`: bolsas/cabezas, cofres, barriles y vasijas con botín diferido, editor in-game y compatibilidad con pregeneradores como Chunky.
+
+
+## Loot nodes de 1.2.0
+
+El sistema nuevo reutiliza la misma máscara por recurso y la misma cola/throttle. El contenido del loot no se construye al generar el chunk, sino al primer acceso.
+
+Tipos soportados:
+
+- `PLAYER_HEAD`: inventario virtual y textura configurable.
+- `CHEST`: inventario físico vanilla.
+- `BARREL`: inventario físico vanilla.
+- `DECORATED_POT`: exactamente una recompensa al romper/click derecho, con sherds aleatorios en las cuatro caras.
+
+Los objetos MMOItems se guardan por `item-type + item-id`, MythicMobs por `item-id` y vanilla por `Material`, por lo que las tiradas futuras usan la definición actual del item. Ver `LOOT-NODES.md` y `MIGRATION-1.2.0.md`.
+
+## Rendimiento heredado de 1.1.1
 
 ### Escaneo incremental
 
@@ -89,7 +105,7 @@ mvn -B clean package
 Resultado:
 
 ```text
-target/MDVHeadOres-1.1.1.jar
+target/MDVHeadOres-1.2.0.jar
 ```
 
 También incluye `.github/workflows/build.yml` para GitHub Actions.
@@ -100,5 +116,7 @@ También incluye `.github/workflows/build.yml` para GitHub Actions.
 - `/mdvheadores inspect`
 - `/mdvheadores queue`
 - `/mdvheadores generate <radio> [force]`
+- `/mdvheadores loot list`
+- `/mdvheadores loot editor <id>`
 
 `queue` muestra cola principal, reintentos y progreso del escaneo incremental.

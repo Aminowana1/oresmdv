@@ -1,4 +1,4 @@
-# Pruebas recomendadas para MDVHeadOres 1.1.1
+# Pruebas recomendadas para MDVHeadOres 1.2.0
 
 ## 1. Compilación
 
@@ -55,3 +55,25 @@ Usar Spark durante exploración y comprobar que MDVHeadOres no produce picos per
 ## 7. Protecciones
 
 Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucción del soporte.
+
+
+## 8. Loot nodes
+
+1. Deja una definición con `enabled: false` y confirma que aparece en `/mdvheadores loot list`.
+2. Abre `/mdvheadores loot editor <id>` y añade un item vanilla, un MMOItem y un MythicItem.
+3. Comprueba en `lootnodes.yml` que se guardan `Material`, `item-type + item-id` e `item-id` respectivamente.
+4. Activa la definición y recarga.
+5. En un chunk nuevo o pendiente, el nodo debe quedar sobre soporte sólido.
+6. Cofre/barril/cabeza necesitan un espacio vertical; vasija debe fallar si no dispone de dos.
+7. El loot del cofre/cabeza debe quedar disperso aleatoriamente y no volver a tirarse al reabrir.
+8. Una vasija debe soltar exactamente una entrada al romperla o hacer click derecho.
+9. Vaciar un contenedor debe eliminarlo.
+10. Probar hopper, TNT, pistón y colocar otro cofre al lado del cofre de loot.
+
+## 9. Chunks antiguos y Chunky
+
+1. Usa un chunk antiguo con los bits 0-10 ya procesados.
+2. Activa un loot node con bit 11 y visita/carga el chunk.
+3. Solo el bit 11 debe quedar pendiente/procesarse; las vetas y nodos anteriores no deben duplicarse.
+4. Ejecuta una pregeneración con Chunky y observa `/mdvheadores queue`: los chunks deben pasar por la misma cola de MDVHeadOres.
+5. La pregeneración no debe crear una segunda cola ni mantener forzados chunks descargados.

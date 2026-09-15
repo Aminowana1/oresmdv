@@ -122,7 +122,7 @@ public final class ResourceProtectionListener implements Listener {
 
     private boolean isSupportForProtectedResource(Block block) {
         Block above = block.getRelative(BlockFace.UP);
-        if (above.getType() == Material.PLAYER_HEAD && isProtectedResource(above)) return true;
+        if (isProtectedResource(above)) return true;
 
         for (BlockFace face : HORIZONTAL_FACES) {
             Block adjacent = block.getRelative(face);
@@ -138,13 +138,12 @@ public final class ResourceProtectionListener implements Listener {
 
     private boolean isProtectedResource(Block block) {
         if (block == null) return false;
-        Material type = block.getType();
-        if (type != Material.PLAYER_HEAD && type != Material.PLAYER_WALL_HEAD) return false;
         BlockState state = block.getState();
         if (!(state instanceof TileState tileState)) return false;
         PersistentDataContainer pdc = tileState.getPersistentDataContainer();
         return pdc.has(keys.oreKey(), PersistentDataType.STRING)
-                || pdc.has(keys.nodeKey(), PersistentDataType.STRING);
+                || pdc.has(keys.nodeKey(), PersistentDataType.STRING)
+                || pdc.has(keys.lootNodeKey(), PersistentDataType.STRING);
     }
 
     private boolean isProtectedBucket(Material bucket) {

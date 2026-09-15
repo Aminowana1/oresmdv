@@ -16,6 +16,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import com.mdvcraft.headores.loot.model.LootNodeDefinition;
 
 import java.util.Map;
 
@@ -43,6 +44,7 @@ public final class MDVHeadOresCommand implements CommandExecutor {
             case "inspect" -> inspect(sender);
             case "queue", "status", "cola", "estado" -> status(sender);
             case "generate" -> generate(sender, args);
+            case "loot" -> loot(sender, args);
             default -> {
                 sendUsage(sender);
                 yield true;
@@ -54,6 +56,8 @@ public final class MDVHeadOresCommand implements CommandExecutor {
         plugin.reloadPlugin();
         sender.sendMessage(PREFIX + "§aMDVHeadOres recargado. Vetas: §f" + plugin.registry().ores().size()
                 + " §aNodos: §f" + plugin.registry().treeNodes().size()
+                + " §aLoot nodes activos: §f" + plugin.lootNodeRegistry().activeNodes().size()
+                + "§7/§f" + plugin.lootNodeRegistry().allNodes().size()
                 + " §aBits activos: §f" + plugin.tracker().activeResourceCount());
         return true;
     }
@@ -77,8 +81,10 @@ public final class MDVHeadOresCommand implements CommandExecutor {
             PersistentDataContainer pdc = tileState.getPersistentDataContainer();
             String ore = pdc.get(keys.oreKey(), PersistentDataType.STRING);
             String node = pdc.get(keys.nodeKey(), PersistentDataType.STRING);
+            String lootNode = pdc.get(keys.lootNodeKey(), PersistentDataType.STRING);
             if (ore != null) sender.sendMessage(PREFIX + "§aVeta MDVHeadOres: §f" + ore);
             else if (node != null) sender.sendMessage(PREFIX + "§aNodo MDVHeadOres: §f" + node);
+            else if (lootNode != null) sender.sendMessage(PREFIX + "§6Loot node MDVHeadOres: §f" + lootNode);
             else sender.sendMessage(PREFIX + "§7No tiene marca de recurso MDVHeadOres.");
         } else if (target.getType() == Material.PLAYER_HEAD || target.getType() == Material.PLAYER_WALL_HEAD) {
             sender.sendMessage(PREFIX + "§7La cabeza no contiene TileState legible.");
@@ -177,7 +183,44 @@ public final class MDVHeadOresCommand implements CommandExecutor {
         return true;
     }
 
+    private boolean loot(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor> [id]");
+            return true;
+        }
+        if (args[1].equalsIgnoreCase("list")) {
+            sender.sendMessage(PREFIX + "§dLoot nodes definidos: §f" + plugin.lootNodeRegistry().allNodes().size()
+                    + " §8| §7activos: §a" + plugin.lootNodeRegistry().activeNodes().size());
+            for (LootNodeDefinition node : plugin.lootNodeRegistry().allNodes()) {
+                sender.sendMessage("§7- §f" + node.key() + " §8[§e" + node.containerType().name()
+                        + "§8] " + (node.enabled() ? "§aON" : "§cOFF")
+                        + " §7bit=§f" + node.trackingBit() + " §7loot=§f" + node.loot().entries().size());
+            }
+            return true;
+        }
+        if (args[1].equalsIgnoreCase("editor")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(PREFIX + "§cEl editor solo puede abrirlo un jugador.");
+                return true;
+            }
+            if (!plugin.settings().lootNodes().editorEnabled()) {
+                sender.sendMessage(PREFIX + "§cEl editor de loot está desactivado en config.yml.");
+                return true;
+            }
+            if (args.length < 3) {
+                sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot editor <id>");
+                return true;
+            }
+            if (!plugin.lootEditor().open(player, args[2])) {
+                sender.sendMessage(PREFIX + "§cNo existe el loot node '" + args[2] + "'.");
+            }
+            return true;
+        }
+        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor> [id]");
+        return true;
+    }
+
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores reload, inspect, queue o generate <radio> [force]");
+        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores reload, inspect, queue, generate <radio> [force] o loot <list|editor>");
     }
 }

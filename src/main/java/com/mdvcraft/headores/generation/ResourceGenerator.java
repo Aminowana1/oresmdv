@@ -5,6 +5,9 @@ import com.mdvcraft.headores.config.ResourceRegistry;
 import com.mdvcraft.headores.model.OreDefinition;
 import com.mdvcraft.headores.model.ResourceDefinition;
 import com.mdvcraft.headores.model.TreeNodeDefinition;
+import com.mdvcraft.headores.loot.config.LootNodeRegistry;
+import com.mdvcraft.headores.loot.generation.LootNodeGenerator;
+import com.mdvcraft.headores.loot.model.LootNodeDefinition;
 import com.mdvcraft.headores.tracking.ChunkRollTracker;
 import com.mdvcraft.headores.tracking.ResourceKeys;
 import org.bukkit.Bukkit;
@@ -56,6 +59,8 @@ public final class ResourceGenerator {
     private final ResourceRegistry registry;
     private final ChunkRollTracker tracker;
     private final ResourceKeys keys;
+    private final LootNodeRegistry lootNodes;
+    private final LootNodeGenerator lootNodeGenerator;
     private final Map<String, PlayerProfile> profileCache = new HashMap<>();
 
     public ResourceGenerator(
@@ -63,17 +68,21 @@ public final class ResourceGenerator {
             PluginSettings settings,
             ResourceRegistry registry,
             ChunkRollTracker tracker,
-            ResourceKeys keys
+            ResourceKeys keys,
+            LootNodeRegistry lootNodes,
+            LootNodeGenerator lootNodeGenerator
     ) {
         this.plugin = plugin;
         this.settings = settings;
         this.registry = registry;
         this.tracker = tracker;
         this.keys = keys;
+        this.lootNodes = lootNodes;
+        this.lootNodeGenerator = lootNodeGenerator;
     }
 
     public GenerationResult generate(Chunk chunk, boolean force, boolean fromCommand) {
-        if (registry.allResources().isEmpty()) return new GenerationResult(0, 0, 0);
+        if (registry.allResources().isEmpty() && (lootNodes == null || lootNodes.activeNodes().isEmpty())) return new GenerationResult(0, 0, 0);
 
         long mask = settings.tracking().enabled() ? tracker.readMask(chunk) : 0L;
         long originalMask = mask;
@@ -121,13 +130,37 @@ public final class ResourceGenerator {
             }
         }
 
+        if (lootNodes != null && lootNodeGenerator != null) {
+            for (LootNodeDefinition node : lootNodes.activeNodes()) {
+                if (!force && settings.tracking().enabled() && tracker.hasRolled(mask, node.trackingMask())) continue;
+                boolean completed = false;
+                try {
+                    rolled++;
+                    if (node.isAllowedInWorld(worldName)) {
+                        if (force || random.nextDouble() <= node.chunkChance()) {
+                            for (int i = 0; i < node.nodesPerChunk(); i++) {
+                                placed += lootNodeGenerator.generate(chunk, node);
+                            }
+                        }
+                    }
+                    completed = true;
+                } catch (Throwable throwable) {
+                    failures++;
+                    plugin.getLogger().severe("Error generando loot node '" + node.key() + "' en chunk "
+                            + chunk.getX() + "," + chunk.getZ() + ": " + throwable.getClass().getSimpleName()
+                            + " - " + throwable.getMessage());
+                }
+                if (completed && settings.tracking().enabled()) mask = tracker.markRolled(mask, node.trackingMask());
+            }
+        }
+
         if (!settings.tracking().enabled() || mask != originalMask) {
             tracker.writeMask(chunk, mask);
         }
 
         if (settings.debug() && settings.debugLogGeneratedChunks() && (placed > 0 || fromCommand)) {
             plugin.getLogger().info("Chunk " + chunk.getX() + "," + chunk.getZ()
-                    + " procesado. Tiradas nuevas: " + rolled + ", cabezas colocadas: " + placed
+                    + " procesado. Tiradas nuevas: " + rolled + ", recursos colocados: " + placed
                     + (failures > 0 ? ", errores: " + failures : ""));
         }
         return new GenerationResult(rolled, placed, failures);
@@ -289,5 +322,6 @@ public final class ResourceGenerator {
 
     public void clearCaches() {
         profileCache.clear();
+        if (lootNodeGenerator != null) lootNodeGenerator.clearCaches();
     }
 }

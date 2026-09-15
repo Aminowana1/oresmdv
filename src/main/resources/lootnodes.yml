@@ -1,0 +1,144 @@
+# ==========================================================
+# MDVHeadOres 1.2.0 - Loot Nodes
+#
+# IMPORTANTE:
+# - Cada loot node necesita un tracking-bit ÚNICO entre 0 y 62.
+# - Los bits 0-10 ya están usados por las vetas/nodos actuales de MDVCRAFT.
+# - Empieza en 11 y NO cambies un bit después de publicar el nodo.
+# - Los chunks antiguos recibirán solamente las tiradas que tengan pendientes.
+# - Puedes dejar un nodo enabled: false, editar su loot y activarlo cuando esté listo.
+# - El loot se genera al primer acceso, no durante la generación del chunk.
+# - Tipos soportados: PLAYER_HEAD, CHEST, BARREL y DECORATED_POT.
+# ==========================================================
+
+loot-nodes:
+
+  # Ejemplo de bolsa con inventario virtual.
+  bolsa_abandonada:
+    enabled: false
+    tracking-bit: 11
+    display-name: '&6Bolsa abandonada'
+
+    container:
+      type: PLAYER_HEAD
+      # Acepta hash, URL textures.minecraft.net o Base64.
+      texture: ''
+      inventory-size: 18
+
+    generation:
+      worlds:
+        - world
+      min-y: 20
+      max-y: 120
+      chunk-chance: 0.02
+      nodes-per-chunk: 1
+      placement-attempts: 48
+
+      # El contenedor SIEMPRE se coloca sobre un bloque sólido.
+      # PLAYER_HEAD/CHEST/BARREL necesitan 1 espacio vertical.
+      # DECORATED_POT exige 2 espacios verticales libres/reemplazables.
+      # Si hay roca u otro sólido obstruyendo, NO fuerza la generación.
+      replaceable-space:
+        - AIR
+        - CAVE_AIR
+        - VOID_AIR
+        - SHORT_GRASS
+        - TALL_GRASS
+        - FERN
+        - LARGE_FERN
+        - DEAD_BUSH
+        - SNOW
+        - VINE
+        - GLOW_LICHEN
+
+    loot:
+      rolls:
+        min: 3
+        max: 6
+      max-slots: 6
+      merge-same-items: true
+
+      # Se recomienda editar las recompensas desde:
+      # /mdvheadores loot editor bolsa_abandonada
+      entries: {}
+
+
+  # Ejemplo de vasija. Las cuatro caras reciben Pottery Sherds aleatorios.
+  # Siempre selecciona EXACTAMENTE 1 recompensa y la dropea al romperla
+  # o hacer click derecho. No abre inventario.
+  vasija_antigua:
+    enabled: false
+    tracking-bit: 12
+    display-name: '&6Vasija antigua'
+
+    container:
+      type: DECORATED_POT
+
+    generation:
+      worlds:
+        - world
+      min-y: -50
+      max-y: 100
+      chunk-chance: 0.015
+      nodes-per-chunk: 1
+      placement-attempts: 48
+      replaceable-space:
+        - AIR
+        - CAVE_AIR
+        - VOID_AIR
+        - SHORT_GRASS
+        - TALL_GRASS
+        - FERN
+        - LARGE_FERN
+        - DEAD_BUSH
+        - SNOW
+        - VINE
+        - GLOW_LICHEN
+
+    loot:
+      # Para DECORATED_POT el plugin fuerza 1/1 aunque estos valores se editen.
+      rolls:
+        min: 1
+        max: 1
+      max-slots: 1
+      merge-same-items: true
+      entries: {}
+
+
+  # Ejemplo de cofre físico vanilla con loot disperso en slots aleatorios.
+  cofre_antiguo:
+    enabled: false
+    tracking-bit: 13
+    display-name: '&6Cofre antiguo'
+
+    container:
+      type: CHEST
+
+    generation:
+      worlds:
+        - world
+      min-y: -50
+      max-y: 100
+      chunk-chance: 0.01
+      nodes-per-chunk: 1
+      placement-attempts: 48
+      replaceable-space:
+        - AIR
+        - CAVE_AIR
+        - VOID_AIR
+        - SHORT_GRASS
+        - TALL_GRASS
+        - FERN
+        - LARGE_FERN
+        - DEAD_BUSH
+        - SNOW
+        - VINE
+        - GLOW_LICHEN
+
+    loot:
+      rolls:
+        min: 4
+        max: 7
+      max-slots: 7
+      merge-same-items: true
+      entries: {}

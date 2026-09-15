@@ -11,6 +11,9 @@ public final class ResourceKeys {
     private final NamespacedKey dropIdKey;
     private final NamespacedKey legacyGeneratedChunkKey;
     private final NamespacedKey rollMaskKey;
+    private final NamespacedKey lootNodeKey;
+    private final NamespacedKey lootGeneratedKey;
+    private final NamespacedKey lootContentsKey;
 
     public ResourceKeys(Plugin plugin) {
         oreKey = new NamespacedKey(plugin, "ore_key");
@@ -20,6 +23,9 @@ public final class ResourceKeys {
         dropIdKey = new NamespacedKey(plugin, "drop_id");
         legacyGeneratedChunkKey = new NamespacedKey(plugin, "generated_chunk");
         rollMaskKey = new NamespacedKey(plugin, "roll_mask");
+        lootNodeKey = new NamespacedKey(plugin, "loot_node_key");
+        lootGeneratedKey = new NamespacedKey(plugin, "loot_generated");
+        lootContentsKey = new NamespacedKey(plugin, "loot_contents");
     }
 
     public NamespacedKey oreKey() { return oreKey; }
@@ -29,4 +35,7 @@ public final class ResourceKeys {
     public NamespacedKey dropIdKey() { return dropIdKey; }
     public NamespacedKey legacyGeneratedChunkKey() { return legacyGeneratedChunkKey; }
     public NamespacedKey rollMaskKey() { return rollMaskKey; }
+    public NamespacedKey lootNodeKey() { return lootNodeKey; }
+    public NamespacedKey lootGeneratedKey() { return lootGeneratedKey; }
+    public NamespacedKey lootContentsKey() { return lootContentsKey; }
 }

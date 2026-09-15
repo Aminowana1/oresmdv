@@ -5,6 +5,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkPopulateEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 
 public final class ChunkGenerationListener implements Listener {
@@ -17,6 +18,11 @@ public final class ChunkGenerationListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onChunkLoad(ChunkLoadEvent event) {
         queueManager.handleChunkLoad(event.getChunk(), event.isNewChunk());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkPopulate(ChunkPopulateEvent event) {
+        queueManager.handleChunkPopulate(event.getChunk());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
