@@ -1,0 +1,16 @@
+# MDVHeadOres 1.3.3
+# Sustituye la vieja clave `file: "lootnodes.yml"` por estas dos.
+# Si dejas `file`, 1.3.3 igualmente la reconoce como legacy por compatibilidad.
+
+loot-nodes:
+  enabled: true
+  directory: "lootnodes"
+  legacy-file: "lootnodes.yml"
+
+  editor:
+    enabled: true
+    rewards-per-page: 45
+
+chunky-compatibility:
+  enabled: true
+  listen-chunk-populate: true

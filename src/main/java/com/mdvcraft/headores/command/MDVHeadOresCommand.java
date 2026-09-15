@@ -249,6 +249,10 @@ public final class MDVHeadOresCommand implements TabExecutor {
             sender.sendMessage(PREFIX + "§aLoot node §f" + node.key() + " §agenerado en §f"
                     + target.getWorld().getName() + " " + target.getX() + " " + target.getY() + " " + target.getZ()
                     + "§a. El botín se tirará normalmente en el primer acceso.");
+            if (node.loot().entries().isEmpty()) {
+                sender.sendMessage(PREFIX + "§eAviso: este nodo tiene §f0 recompensas§e. "
+                        + "No se consumirá al usarlo; configúralo con §f/mdvheadores loot editor " + node.key());
+            }
             return true;
         }
         sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor|spawn> [id]");

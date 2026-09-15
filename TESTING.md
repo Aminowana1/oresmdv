@@ -61,7 +61,7 @@ Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucció
 
 1. Deja una definición con `enabled: false` y confirma que aparece en `/mdvheadores loot list`.
 2. Abre `/mdvheadores loot editor <id>` y añade un item vanilla, un MMOItem y un MythicItem.
-3. Comprueba en `lootnodes.yml` que se guardan `Material`, `item-type + item-id` e `item-id` respectivamente.
+3. Comprueba en el YAML individual dentro de `lootnodes/` que se guardan `Material`, `item-type + item-id` e `item-id` respectivamente.
 4. Activa la definición y recarga.
 5. En un chunk nuevo o pendiente, el nodo debe quedar sobre soporte sólido.
 6. Cofre/barril/cabeza necesitan un espacio vertical; vasija debe fallar si no dispone de dos.
@@ -95,5 +95,5 @@ Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucció
 2. Añade más de 45 recompensas usando SHIFT+click desde el inventario. Comprueba navegación anterior/siguiente y que al editar/eliminar se regrese a la página correcta.
 3. Añade un `ENCHANTED_BOOK` con uno o más encantamientos almacenados. Cierra, ejecuta `/mdvheadores reload` y vuelve a abrir el editor: el preview debe conservar exactamente los encantamientos.
 4. Fuerza/genera el loot node y comprueba que el libro obtenido conserva los mismos encantamientos.
-5. Comprueba que MMOItems siguen apareciendo en `lootnodes.yml` como `type: MMOITEM` + `item-type` + `item-id`, y MythicMobs como `type: MYTHICMOBS` + `item-id`.
+5. Comprueba que MMOItems siguen apareciendo en el YAML individual dentro de `lootnodes/` como `type: MMOITEM` + `item-type` + `item-id`, y MythicMobs como `type: MYTHICMOBS` + `item-id`.
 6. Comprueba que un vanilla simple sigue guardándose solo como `type: VANILLA` + `material`, mientras que el libro encantado usa `type: CUSTOM_VANILLA` + `item-data`.

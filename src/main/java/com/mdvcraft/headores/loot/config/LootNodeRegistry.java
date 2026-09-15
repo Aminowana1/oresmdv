@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -35,70 +36,163 @@ public final class LootNodeRegistry {
             "AIR", "CAVE_AIR", "VOID_AIR", "SHORT_GRASS", "TALL_GRASS", "FERN", "LARGE_FERN",
             "DEAD_BUSH", "SNOW", "VINE", "GLOW_LICHEN"
     );
+    private static final List<String> DEFAULT_NODE_FILES = List.of(
+            "bolsa_abandonada.yml", "vasija_antigua.yml", "cofre_antiguo.yml"
+    );
 
     private final JavaPlugin plugin;
-    private final File file;
-    private final YamlConfiguration yaml;
+    private final File directory;
+    private final Map<String, File> nodeFiles;
+    private final Map<String, YamlConfiguration> nodeYamls;
     private final Map<String, LootNodeDefinition> nodes;
     private List<LootNodeDefinition> activeNodes;
     private final long activeMask;
 
-    private LootNodeRegistry(JavaPlugin plugin, File file, YamlConfiguration yaml,
+    private LootNodeRegistry(JavaPlugin plugin, File directory,
+                             Map<String, File> nodeFiles,
+                             Map<String, YamlConfiguration> nodeYamls,
                              Map<String, LootNodeDefinition> nodes,
                              List<LootNodeDefinition> activeNodes, long activeMask) {
         this.plugin = plugin;
-        this.file = file;
-        this.yaml = yaml;
+        this.directory = directory;
+        this.nodeFiles = nodeFiles;
+        this.nodeYamls = nodeYamls;
         this.nodes = nodes;
         this.activeNodes = activeNodes;
         this.activeMask = activeMask;
     }
 
     public static LootNodeRegistry load(JavaPlugin plugin, PluginSettings settings, ResourceRegistry resources) {
-        String fileName = settings.lootNodes().fileName();
-        if (fileName == null || fileName.isBlank()) fileName = "lootnodes.yml";
-        File file = new File(plugin.getDataFolder(), fileName);
-        if (!file.exists()) {
-            try {
-                plugin.saveResource(fileName, false);
-            } catch (IllegalArgumentException ignored) {
-                try {
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    file.createNewFile();
-                } catch (IOException exception) {
-                    plugin.getLogger().severe("No pude crear " + fileName + ": " + exception.getMessage());
-                }
-            }
+        String directoryName = settings.lootNodes().directoryName();
+        if (directoryName == null || directoryName.isBlank()) directoryName = "lootnodes";
+        File directory = new File(plugin.getDataFolder(), directoryName);
+        if (!directory.exists() && !directory.mkdirs()) {
+            plugin.getLogger().severe("No pude crear la carpeta de loot nodes: " + directory.getPath());
         }
 
-        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        // Instalaciones viejas: primero migra el archivo combinado para no
+        // permitir que ejemplos nuevos tapen archivos del usuario.
+        migrateLegacyFile(plugin, settings, directory);
+
+        // Instalaciones nuevas: si después de migrar sigue vacío, copia ejemplos.
+        if (listYamlFiles(directory).length == 0) {
+            copyBundledDefaults(plugin, directoryName);
+        }
+
         Map<String, LootNodeDefinition> nodes = new LinkedHashMap<>();
+        Map<String, File> nodeFiles = new LinkedHashMap<>();
+        Map<String, YamlConfiguration> nodeYamls = new LinkedHashMap<>();
         Set<Integer> usedBits = new HashSet<>();
         for (ResourceDefinition resource : resources.allResources()) usedBits.add(resource.trackingBit());
 
         if (settings.lootNodes().enabled()) {
-            ConfigurationSection root = yaml.getConfigurationSection("loot-nodes");
-            if (root != null) {
-                for (String key : root.getKeys(false)) {
-                    ConfigurationSection sec = root.getConfigurationSection(key);
-                    if (sec == null) continue;
-                    LootNodeDefinition definition = loadNode(plugin, key, sec, usedBits);
-                    if (definition != null) nodes.put(key, definition);
+            File[] files = listYamlFiles(directory);
+            Arrays.sort(files, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
+            for (File file : files) {
+                YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+                String key = yaml.getString("id", stripExtension(file.getName())).trim().toLowerCase(Locale.ROOT);
+                if (key.isBlank()) {
+                    plugin.getLogger().warning("Loot node sin id válido en " + file.getName() + ". Se omitió.");
+                    continue;
                 }
+                if (nodes.containsKey(key)) {
+                    plugin.getLogger().warning("Loot node duplicado '" + key + "' en " + file.getName() + ". Se omitió.");
+                    continue;
+                }
+                LootNodeDefinition definition = loadNode(plugin, key, yaml, usedBits);
+                if (definition == null) continue;
+                nodes.put(key, definition);
+                nodeFiles.put(key, file);
+                nodeYamls.put(key, yaml);
             }
         }
 
         List<LootNodeDefinition> sorted = new ArrayList<>(nodes.values());
         sorted.sort(Comparator.comparingInt(LootNodeDefinition::trackingBit));
-        nodes.clear();
-        for (LootNodeDefinition node : sorted) nodes.put(node.key(), node);
+        Map<String, LootNodeDefinition> sortedNodes = new LinkedHashMap<>();
+        Map<String, File> sortedFiles = new LinkedHashMap<>();
+        Map<String, YamlConfiguration> sortedYamls = new LinkedHashMap<>();
+        for (LootNodeDefinition node : sorted) {
+            sortedNodes.put(node.key(), node);
+            sortedFiles.put(node.key(), nodeFiles.get(node.key()));
+            sortedYamls.put(node.key(), nodeYamls.get(node.key()));
+        }
 
-        List<LootNodeDefinition> activeNodes = List.copyOf(nodes.values().stream()
+        List<LootNodeDefinition> activeNodes = List.copyOf(sortedNodes.values().stream()
                 .filter(LootNodeDefinition::enabled)
                 .toList());
         long activeMask = 0L;
         for (LootNodeDefinition node : activeNodes) activeMask |= node.trackingMask();
-        return new LootNodeRegistry(plugin, file, yaml, nodes, activeNodes, activeMask);
+        return new LootNodeRegistry(plugin, directory, sortedFiles, sortedYamls, sortedNodes, activeNodes, activeMask);
+    }
+
+    private static void copyBundledDefaults(JavaPlugin plugin, String directoryName) {
+        for (String name : DEFAULT_NODE_FILES) {
+            String resource = directoryName.replace('\\', '/') + "/" + name;
+            try {
+                plugin.saveResource(resource, false);
+            } catch (IllegalArgumentException ignored) {
+                // El JAR puede provenir de una instalación migrada sin ejemplos; no es fatal.
+            }
+        }
+    }
+
+    private static void migrateLegacyFile(JavaPlugin plugin, PluginSettings settings, File directory) {
+        String legacyName = settings.lootNodes().legacyFileName();
+        if (legacyName == null || legacyName.isBlank()) legacyName = "lootnodes.yml";
+        File legacy = new File(plugin.getDataFolder(), legacyName);
+        if (!legacy.exists() || !legacy.isFile()) return;
+
+        YamlConfiguration legacyYaml = YamlConfiguration.loadConfiguration(legacy);
+        ConfigurationSection root = legacyYaml.getConfigurationSection("loot-nodes");
+        if (root == null) return;
+
+        int migrated = 0;
+        for (String key : root.getKeys(false)) {
+            ConfigurationSection source = root.getConfigurationSection(key);
+            if (source == null) continue;
+            File target = new File(directory, safeFileName(key) + ".yml");
+            if (target.exists()) continue;
+            YamlConfiguration out = new YamlConfiguration();
+            out.set("id", key.toLowerCase(Locale.ROOT));
+            copySection(source, out, "");
+            try {
+                out.save(target);
+                migrated++;
+            } catch (IOException exception) {
+                plugin.getLogger().severe("No pude migrar loot node '" + key + "' a " + target.getName() + ": " + exception.getMessage());
+            }
+        }
+        if (migrated > 0) {
+            plugin.getLogger().info("Migrados " + migrated + " loot nodes desde " + legacy.getName()
+                    + " a la carpeta " + directory.getName() + "/. El archivo antiguo se conserva como respaldo.");
+        }
+    }
+
+    private static void copySection(ConfigurationSection source, YamlConfiguration target, String prefix) {
+        for (String key : source.getKeys(false)) {
+            Object value = source.get(key);
+            String path = prefix.isEmpty() ? key : prefix + "." + key;
+            if (value instanceof ConfigurationSection child) copySection(child, target, path);
+            else target.set(path, value);
+        }
+    }
+
+    private static File[] listYamlFiles(File directory) {
+        File[] files = directory.listFiles(file -> file.isFile()
+                && (file.getName().toLowerCase(Locale.ROOT).endsWith(".yml")
+                || file.getName().toLowerCase(Locale.ROOT).endsWith(".yaml")));
+        return files == null ? new File[0] : files;
+    }
+
+    private static String stripExtension(String name) {
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
+    }
+
+    private static String safeFileName(String key) {
+        String safe = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "_");
+        return safe.isBlank() ? "loot_node" : safe;
     }
 
     private static LootNodeDefinition loadNode(JavaPlugin plugin, String key, ConfigurationSection sec,
@@ -238,7 +332,10 @@ public final class LootNodeRegistry {
 
     public synchronized boolean updateLoot(String key, LootTableDefinition loot) {
         LootNodeDefinition current = nodes.get(key);
-        if (current == null) return false;
+        YamlConfiguration yaml = nodeYamls.get(key);
+        File file = nodeFiles.get(key);
+        if (current == null || yaml == null || file == null) return false;
+
         LootNodeDefinition updated = current.withLoot(current.containerType().singleDrop()
                 ? new LootTableDefinition(1, 1, 1, loot.mergeSameItems(), loot.entries())
                 : loot);
@@ -253,7 +350,8 @@ public final class LootNodeRegistry {
             }
             activeNodes = List.copyOf(refreshed);
         }
-        writeLootToYaml(updated);
+
+        writeLootToYaml(yaml, updated);
         try {
             yaml.save(file);
             return true;
@@ -263,8 +361,8 @@ public final class LootNodeRegistry {
         }
     }
 
-    private void writeLootToYaml(LootNodeDefinition node) {
-        String base = "loot-nodes." + node.key() + ".loot";
+    private static void writeLootToYaml(YamlConfiguration yaml, LootNodeDefinition node) {
+        String base = "loot";
         LootTableDefinition loot = node.loot();
         yaml.set(base + ".rolls.min", node.containerType().singleDrop() ? 1 : loot.rollsMin());
         yaml.set(base + ".rolls.max", node.containerType().singleDrop() ? 1 : loot.rollsMax());
@@ -310,10 +408,13 @@ public final class LootNodeRegistry {
         return trimmed.matches("[a-zA-Z0-9]{20,}") ? trimmed : null;
     }
 
-    public LootNodeDefinition node(String key) { return nodes.get(key); }
+    public LootNodeDefinition node(String key) {
+        return key == null ? null : nodes.get(key.toLowerCase(Locale.ROOT));
+    }
     public List<LootNodeDefinition> allNodes() { return List.copyOf(nodes.values()); }
     public List<LootNodeDefinition> activeNodes() { return activeNodes; }
     public Map<String, LootNodeDefinition> nodes() { return Map.copyOf(nodes); }
     public long activeMask() { return activeMask; }
-    public File file() { return file; }
+    public File directory() { return directory; }
+    public File fileFor(String key) { return nodeFiles.get(key); }
 }

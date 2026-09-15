@@ -57,7 +57,7 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
-        getLogger().info("MDVHeadOres 1.3.1 activado. Vetas: " + registry.ores().size()
+        getLogger().info("MDVHeadOres 1.3.3 activado. Vetas: " + registry.ores().size()
                 + ", nodos: " + registry.treeNodes().size()
                 + ", loot nodes activos: " + lootNodeRegistry.activeNodes().size()
                 + "/" + lootNodeRegistry.allNodes().size()

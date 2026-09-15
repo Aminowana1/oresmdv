@@ -42,17 +42,24 @@ public final class LootNodeListener implements Listener {
         if (node == null) return;
 
         if (node.containerType() == LootContainerType.DECORATED_POT) {
+            // La interacción entrega el premio una sola vez, pero la vasija queda.
             event.setCancelled(true);
-            service.claimPot(block);
+            if (!service.claimPot(block)) sendNoLoot(event.getPlayer());
             return;
         }
         if (node.containerType() == LootContainerType.PLAYER_HEAD) {
             event.setCancelled(true);
-            service.openVirtual(event.getPlayer(), block, node);
+            if (!service.openVirtual(event.getPlayer(), block, node)) sendNoLoot(event.getPlayer());
             return;
         }
 
-        service.ensurePhysicalInventoryGenerated(block, node);
+        // CHEST/BARREL: genera el loot justo antes de que Minecraft abra el
+        // inventario físico. El contenido queda en slots aleatorios y el bloque
+        // nunca se elimina automáticamente al vaciarse.
+        if (!service.ensurePhysicalInventoryGenerated(block, node)) {
+            event.setCancelled(true);
+            sendNoLoot(event.getPlayer());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -60,14 +67,31 @@ public final class LootNodeListener implements Listener {
         Block block = event.getBlock();
         LootNodeDefinition node = service.definition(block);
         if (node != null) {
-            event.setDropItems(false);
             event.setExpToDrop(0);
-            event.setCancelled(true);
-            if (node.containerType() == LootContainerType.DECORATED_POT) {
-                service.claimPot(block);
-            } else {
-                event.getPlayer().sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eVacía este contenedor para retirarlo.");
+
+            if (node.containerType() == LootContainerType.PLAYER_HEAD) {
+                // Las bolsas/cabezas siguen siendo el único tipo que desaparece
+                // automáticamente cuando su inventario virtual queda vacío.
+                event.setDropItems(false);
+                event.setCancelled(true);
+                event.getPlayer().sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eVacía esta bolsa para retirarla.");
+                return;
             }
+
+            if (node.containerType() == LootContainerType.DECORATED_POT) {
+                // Si nunca fue reclamada, romperla también entrega su premio.
+                // No cancelamos el break: la vasija solo desaparece porque el
+                // jugador la destruyó. Evitamos que además dropee la vasija item.
+                event.setDropItems(false);
+                if (!service.claimPot(block)) sendNoLoot(event.getPlayer());
+                return;
+            }
+
+            // CHEST/BARREL: si se rompen antes del primer acceso, genera primero
+            // el loot para que el contenido salga con la rotura vanilla.
+            service.ensurePhysicalInventoryGenerated(block, node);
+            // No cancelamos y no forzamos setDropItems(false): el contenedor y su
+            // contenido se rompen de forma vanilla por decisión del jugador.
             return;
         }
 
@@ -84,12 +108,8 @@ public final class LootNodeListener implements Listener {
         InventoryHolder holder = inventory.getHolder(false);
         if (holder instanceof LootInventoryHolder virtual) {
             plugin.getServer().getScheduler().runTask(plugin, () -> service.saveVirtual(virtual, inventory));
-            return;
         }
-        Block block = holderBlock(holder);
-        if (block != null && service.isLootNode(block)) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> service.removeIfEmptyPhysical(block));
-        }
+        // Los inventarios físicos (CHEST/BARREL) nunca se eliminan al vaciarse.
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -114,6 +134,10 @@ public final class LootNodeListener implements Listener {
                 return;
             }
         }
+    }
+
+    private static void sendNoLoot(org.bukkit.entity.Player player) {
+        player.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eEste contenedor todavía no tiene recompensas válidas configuradas.");
     }
 
     private static Block holderBlock(InventoryHolder holder) {

@@ -1,8 +1,8 @@
-# MDVHeadOres 1.3.1
+# MDVHeadOres 1.3.2
 
 Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha, experiencia opcional de MMOCore y seguimiento compacto por chunk.
 
-Desde 1.2.0 incorpora **loot nodes** configurados en `lootnodes.yml`: bolsas/cabezas, cofres, barriles y vasijas con botín diferido, editor in-game y compatibilidad con pregeneradores como Chunky.
+Desde 1.2.0 incorpora **loot nodes** configurados en archivos individuales dentro de `lootnodes/`: bolsas/cabezas, cofres, barriles y vasijas con botín diferido, editor in-game y compatibilidad con pregeneradores como Chunky.
 
 
 ## Loot nodes de 1.2.0
@@ -105,7 +105,7 @@ mvn -B clean package
 Resultado:
 
 ```text
-target/MDVHeadOres-1.3.1.jar
+target/MDVHeadOres-1.3.2.jar
 ```
 
 También incluye `.github/workflows/build.yml` para GitHub Actions.

@@ -1,5 +1,6 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
+# v1.3.3: loot nodes separados por YAML; cofres/vasijas persistentes; fix de inventario físico.
 # v1.3.1: editor paginado de loot nodes y soporte completo para libros encantados/vanilla con metadata.
 # v1.3.0: añade spawn manual de loot nodes, cabezas colocables de recursos y loot de equipo aleatorio/no identificado.
 
@@ -741,11 +742,13 @@ tree-nodes:
 
 # ==========================================================
 # LOOT NODES - cofres, barriles, bolsas/cabezas y vasijas
-# Las definiciones individuales viven en lootnodes.yml.
+# Cada nodo vive en su propio YAML dentro de plugins/MDVHeadOres/lootnodes/.
+# El viejo lootnodes.yml se importa automáticamente como migración y se conserva como respaldo.
 # ==========================================================
 loot-nodes:
   enabled: true
-  file: "lootnodes.yml"
+  directory: "lootnodes"
+  legacy-file: "lootnodes.yml"
 
   # /mdvheadores loot editor <id>
   editor:

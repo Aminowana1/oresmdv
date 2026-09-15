@@ -61,21 +61,43 @@ public final class LootNodeService {
         return nodeKey(block) != null;
     }
 
-    public void ensurePhysicalInventoryGenerated(Block block, LootNodeDefinition node) {
+    /**
+     * Garantiza que un contenedor físico tenga su botín generado.
+     *
+     * @return true si ya estaba generado o si pudo generar al menos una
+     *         recompensa válida. false si la tabla está vacía o ninguna
+     *         recompensa pudo construirse. En ese caso el nodo NO se consume.
+     */
+    public boolean ensurePhysicalInventoryGenerated(Block block, LootNodeDefinition node) {
         BlockState state = block.getState();
-        if (!(state instanceof Container container) || !(state instanceof TileState tile)) return;
+        if (!(state instanceof Container) || !(state instanceof TileState tile)) return false;
         PersistentDataContainer pdc = tile.getPersistentDataContainer();
-        if (isGenerated(pdc)) return;
+        if (isGenerated(pdc)) return true;
 
         List<ItemStack> rolled = lootTables.roll(node);
-        placeRandom(container.getInventory(), rolled);
+        if (rolled.isEmpty()) return false;
+
+        // IMPORTANTE: primero persistimos el PDC y actualizamos el TileState.
+        // Si llenamos el inventario antes de tile.update(), un BlockState/snapshot
+        // antiguo puede reescribir el cofre o barril y dejarlo vacío.
         pdc.set(keys.lootGeneratedKey(), PersistentDataType.BYTE, (byte) 1);
-        tile.update(true, false);
+        if (!tile.update(true, false)) return false;
+
+        // Volvemos a obtener el estado REAL ya actualizado y recién entonces
+        // distribuimos el loot en posiciones aleatorias del inventario físico.
+        BlockState refreshed = block.getState();
+        if (!(refreshed instanceof Container liveContainer)) return false;
+        placeRandom(liveContainer.getInventory(), rolled);
+        return true;
     }
 
-    public void openVirtual(Player player, Block block, LootNodeDefinition node) {
+    /**
+     * Abre un contenedor virtual. Si todavía no estaba generado y la tabla no
+     * produce ninguna recompensa válida, no abre ni marca el nodo como usado.
+     */
+    public boolean openVirtual(Player player, Block block, LootNodeDefinition node) {
         BlockState state = block.getState();
-        if (!(state instanceof TileState tile)) return;
+        if (!(state instanceof TileState tile)) return false;
         String cacheKey = cacheKey(block);
         Inventory inventory = openVirtualInventories.get(cacheKey);
         if (inventory == null) {
@@ -88,7 +110,9 @@ public final class LootNodeService {
             if (isGenerated(pdc)) {
                 inventory.setContents(virtualStorage.load(pdc, node.inventorySize()));
             } else {
-                placeRandom(inventory, lootTables.roll(node));
+                List<ItemStack> rolled = lootTables.roll(node);
+                if (rolled.isEmpty()) return false;
+                placeRandom(inventory, rolled);
                 pdc.set(keys.lootGeneratedKey(), PersistentDataType.BYTE, (byte) 1);
                 virtualStorage.save(pdc, inventory.getContents());
                 tile.update(true, false);
@@ -96,6 +120,7 @@ public final class LootNodeService {
             openVirtualInventories.put(cacheKey, inventory);
         }
         player.openInventory(inventory);
+        return true;
     }
 
     public void saveVirtual(LootInventoryHolder holder, Inventory inventory) {
@@ -131,14 +156,21 @@ public final class LootNodeService {
         BlockState state = block.getState();
         if (!(state instanceof TileState tile)) return false;
         PersistentDataContainer pdc = tile.getPersistentDataContainer();
-        if (isGenerated(pdc)) return false;
+
+        // Ya fue saqueada: la vasija permanece físicamente y no vuelve a dar loot.
+        if (isGenerated(pdc)) return true;
+
+        // Primero resolvemos el botín. Si la tabla está vacía o sus referencias
+        // no pueden construirse, la vasija permanece intacta y reclamable.
+        List<ItemStack> rolled = lootTables.roll(node);
+        if (rolled.isEmpty()) return false;
 
         // Marca antes del drop para que dos eventos del mismo tick no dupliquen la recompensa.
         pdc.set(keys.lootGeneratedKey(), PersistentDataType.BYTE, (byte) 1);
-        tile.update(true, false);
-        List<ItemStack> rolled = lootTables.roll(node);
+        if (!tile.update(true, false)) return false;
+
+        // La vasija NO desaparece al reclamarla. Solo desaparece si un jugador la rompe.
         Location dropAt = block.getLocation().add(0.5D, 0.4D, 0.5D);
-        block.setType(Material.AIR, false);
         for (ItemStack stack : rolled) {
             Item item = block.getWorld().dropItemNaturally(dropAt, stack);
             item.setPickupDelay(5);
@@ -147,11 +179,8 @@ public final class LootNodeService {
     }
 
     public void removeIfEmptyPhysical(Block block) {
-        BlockState state = block.getState();
-        if (!(state instanceof Container container) || !(state instanceof TileState tile)) return;
-        if (!tile.getPersistentDataContainer().has(keys.lootNodeKey(), PersistentDataType.STRING)) return;
-        if (!isGenerated(tile.getPersistentDataContainer())) return;
-        if (container.getInventory().isEmpty()) block.setType(Material.AIR, false);
+        // CHEST/BARREL nunca se eliminan automáticamente. Este método se conserva
+        // como no-op por compatibilidad interna con versiones anteriores.
     }
 
     public void persistAllVirtual() {

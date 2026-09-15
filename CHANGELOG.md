@@ -1,3 +1,24 @@
+# MDVHeadOres 1.3.3
+
+- Corrige CHEST/BARREL que podían abrirse vacíos por actualizar un TileState capturado antes de insertar el loot.
+- El loot físico se inserta después de persistir PDC y reacceder al inventario real; los slots siguen siendo aleatorios/dispersos.
+- CHEST y BARREL ya no desaparecen automáticamente al quedar vacíos.
+- DECORATED_POT ya no desaparece al reclamar con click derecho; queda marcada como saqueada y permanece hasta que un jugador la rompe.
+- PLAYER_HEAD sigue siendo el único contenedor que desaparece automáticamente al vaciar su inventario virtual.
+- CHEST/BARREL/DECORATED_POT pueden ser destruidos manualmente.
+- Cada loot node vive en su propio YAML dentro de `lootnodes/`.
+- Migración automática y no destructiva desde el viejo `lootnodes.yml`; el archivo anterior se conserva como respaldo.
+
+# MDVHeadOres 1.3.2
+
+## Fix de consumo de loot nodes vacíos
+
+- Vasijas ya no desaparecen si `entries` está vacío o ninguna recompensa puede construirse.
+- PLAYER_HEAD ya no abre/genera un inventario vacío ni se consume en ese caso.
+- CHEST/BARREL ya no se marcan como generados cuando el roll devuelve 0 items.
+- Si no hay recompensas válidas se informa al jugador y el nodo permanece intacto.
+- Se mantiene el bloqueo anti doble-claim de vasijas una vez que sí existe un premio válido.
+
 # Changelog
 
 ## 1.3.1

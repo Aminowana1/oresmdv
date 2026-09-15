@@ -1,11 +1,11 @@
-# Loot Nodes — MDVHeadOres 1.3.1
+# Loot Nodes — MDVHeadOres 1.3.3
 
 ## Tipos de contenedor
 
 - `PLAYER_HEAD`: bolsa/cofrecito con textura. Abre inventario virtual de 9, 18, 27, 36, 45 o 54 slots.
 - `CHEST`: cofre vanilla de 27 slots.
 - `BARREL`: barril vanilla de 27 slots.
-- `DECORATED_POT`: vasija con las cuatro caras decoradas aleatoriamente con Pottery Sherds de Minecraft 1.21.6. No abre inventario: siempre elige una sola recompensa y la suelta al romper/click derecho.
+- `DECORATED_POT`: vasija con las cuatro caras decoradas aleatoriamente con Pottery Sherds de Minecraft 1.21.6. No abre inventario: siempre elige una sola recompensa y la suelta al romper/click derecho. Al reclamarla por click derecho la vasija permanece en el mundo; solo desaparece si un jugador la rompe.
 
 El loot de los inventarios se distribuye en slots aleatorios, no desde la esquina superior izquierda.
 
@@ -74,7 +74,8 @@ El loot es compartido entre jugadores. Un contenedor abierto no vuelve a tirar s
 
 - Los cofres/barriles usan su inventario vanilla.
 - Las bolsas/cabezas guardan su inventario virtual en PDC.
-- Al quedar vacío, el loot node desaparece.
+- Solo `PLAYER_HEAD` desaparece automáticamente al quedar vacío.
+- `CHEST`, `BARREL` y `DECORATED_POT` nunca desaparecen por saqueo; permanecen hasta que un jugador los rompe.
 - Hoppers no extraen ni introducen items.
 - No se puede formar un cofre doble con un cofre de loot.
 - Las protecciones existentes contra pistones, líquidos, explosiones y física también reconocen los loot nodes.
@@ -101,3 +102,23 @@ El item que el jugador identifica más tarde conserva la tirada generada al abri
 `/mdvheadores loot editor <id>` soporta múltiples páginas. Usa **SHIFT+click** en un objeto de tu inventario para añadir una copia rápidamente, o el método de cursor + slot vacío.
 
 Los MMOItems/MythicMobs se guardan por ID. Los vanilla simples se guardan por Material. Los vanilla con metadata/componentes (incluidos los libros encantados) se guardan como `CUSTOM_VANILLA` para preservar exactamente sus encantamientos y demás datos.
+
+
+## Archivos individuales (1.3.3)
+
+Cada loot node vive en su propio archivo:
+
+```text
+plugins/MDVHeadOres/lootnodes/
+  bolsa_abandonada.yml
+  vasija_antigua.yml
+  cofre_antiguo.yml
+```
+
+El ID se toma de `id:` (o del nombre del archivo si no existe). El editor guarda únicamente el YAML del nodo editado.
+
+Al actualizar desde 1.3.2 o anterior, el viejo `lootnodes.yml` se divide automáticamente en archivos individuales sin borrarlo; queda como respaldo.
+
+## Cofres/barriles físicos (1.3.3)
+
+El PDC se persiste antes de insertar los premios y luego se reaccede al inventario real del bloque. Esto evita que un `BlockState` anterior sobrescriba el inventario y deje el cofre vacío. Los premios se colocan en slots vacíos barajados aleatoriamente.

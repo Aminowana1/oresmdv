@@ -1,0 +1,36 @@
+# MDVHeadOres 1.3.3 - Loot Node individual
+# ID estable del nodo. No cambies tracking-bit después de publicarlo.
+
+id: cofre_antiguo
+enabled: false
+tracking-bit: 13
+display-name: '&6Cofre antiguo'
+container:
+  type: CHEST
+generation:
+  worlds:
+  - world
+  min-y: -50
+  max-y: 100
+  chunk-chance: 0.01
+  nodes-per-chunk: 1
+  placement-attempts: 48
+  replaceable-space:
+  - AIR
+  - CAVE_AIR
+  - VOID_AIR
+  - SHORT_GRASS
+  - TALL_GRASS
+  - FERN
+  - LARGE_FERN
+  - DEAD_BUSH
+  - SNOW
+  - VINE
+  - GLOW_LICHEN
+loot:
+  rolls:
+    min: 4
+    max: 7
+  max-slots: 7
+  merge-same-items: true
+  entries: {}
