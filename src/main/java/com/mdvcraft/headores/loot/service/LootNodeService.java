@@ -13,6 +13,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.TileState;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -92,8 +93,11 @@ public final class LootNodeService {
     }
 
     /**
-     * Abre un contenedor virtual. Si todavía no estaba generado y la tabla no
-     * produce ninguna recompensa válida, no abre ni marca el nodo como usado.
+     * Abre una bolsa/cabeza con inventario virtual.
+     *
+     * Si no existe ninguna recompensa válida, la bolsa desaparece inmediatamente
+     * y en silencio. De este modo una bolsa vacía nunca queda como PLAYER_HEAD
+     * decorativa ni muestra mensajes administrativos al jugador.
      */
     public boolean openVirtual(Player player, Block block, LootNodeDefinition node) {
         BlockState state = block.getState();
@@ -109,9 +113,17 @@ public final class LootNodeService {
             PersistentDataContainer pdc = tile.getPersistentDataContainer();
             if (isGenerated(pdc)) {
                 inventory.setContents(virtualStorage.load(pdc, node.inventorySize()));
+                if (isEmpty(inventory)) {
+                    openVirtualInventories.remove(cacheKey);
+                    block.setType(Material.AIR, false);
+                    return true;
+                }
             } else {
                 List<ItemStack> rolled = lootTables.roll(node);
-                if (rolled.isEmpty()) return false;
+                if (rolled.isEmpty()) {
+                    block.setType(Material.AIR, false);
+                    return true;
+                }
                 placeRandom(inventory, rolled);
                 pdc.set(keys.lootGeneratedKey(), PersistentDataType.BYTE, (byte) 1);
                 virtualStorage.save(pdc, inventory.getContents());
@@ -121,6 +133,50 @@ public final class LootNodeService {
         }
         player.openInventory(inventory);
         return true;
+    }
+
+    /**
+     * Rompe una bolsa/cabeza manualmente sin dropear nunca la PLAYER_HEAD.
+     *
+     * - Sin loot válido: simplemente desaparece.
+     * - Sin abrir todavía: tira la tabla una vez y suelta el resultado al suelo.
+     * - Ya abierta: suelta únicamente el contenido restante.
+     * - Si alguien la estaba viendo, se cierra su inventario antes de eliminarla
+     *   para impedir duplicaciones.
+     */
+    public void breakVirtualHead(Block block, LootNodeDefinition node) {
+        if (block == null || node == null || node.containerType() != LootContainerType.PLAYER_HEAD) return;
+
+        String key = cacheKey(block);
+        List<ItemStack> drops = new ArrayList<>();
+        Inventory openInventory = openVirtualInventories.remove(key);
+
+        if (openInventory != null) {
+            collectContents(openInventory.getContents(), drops);
+            openInventory.clear();
+
+            // InventoryCloseEvent persiste en el siguiente tick. Para entonces el
+            // bloque ya será AIR, así que no puede volver a guardar/duplicar loot.
+            List<HumanEntity> viewers = new ArrayList<>(openInventory.getViewers());
+            for (HumanEntity viewer : viewers) viewer.closeInventory();
+        } else {
+            BlockState state = block.getState();
+            if (state instanceof TileState tile) {
+                PersistentDataContainer pdc = tile.getPersistentDataContainer();
+                if (isGenerated(pdc)) {
+                    collectContents(virtualStorage.load(pdc, node.inventorySize()), drops);
+                } else {
+                    collectContents(lootTables.roll(node).toArray(ItemStack[]::new), drops);
+                }
+            }
+        }
+
+        Location dropAt = block.getLocation().add(0.5D, 0.35D, 0.5D);
+        block.setType(Material.AIR, false);
+        for (ItemStack stack : drops) {
+            Item item = block.getWorld().dropItemNaturally(dropAt, stack);
+            item.setPickupDelay(5);
+        }
     }
 
     public void saveVirtual(LootInventoryHolder holder, Inventory inventory) {
@@ -207,6 +263,14 @@ public final class LootNodeService {
         for (ItemStack item : items) {
             if (index >= slots.size()) break;
             inventory.setItem(slots.get(index++), item);
+        }
+    }
+
+    private static void collectContents(ItemStack[] contents, List<ItemStack> output) {
+        if (contents == null) return;
+        for (ItemStack stack : contents) {
+            if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) continue;
+            output.add(stack.clone());
         }
     }
 

@@ -42,24 +42,24 @@ public final class LootNodeListener implements Listener {
         if (node == null) return;
 
         if (node.containerType() == LootContainerType.DECORATED_POT) {
-            // La interacción entrega el premio una sola vez, pero la vasija queda.
+            // La interacción intenta entregar el premio una sola vez, pero la
+            // vasija siempre queda. Si no hay loot válido, simplemente no pasa nada.
             event.setCancelled(true);
-            if (!service.claimPot(block)) sendNoLoot(event.getPlayer());
+            service.claimPot(block);
             return;
         }
         if (node.containerType() == LootContainerType.PLAYER_HEAD) {
+            // Las bolsas usan inventario virtual. Si están vacías porque no hay
+            // ninguna recompensa válida, desaparecen silenciosamente al tocarlas.
             event.setCancelled(true);
-            if (!service.openVirtual(event.getPlayer(), block, node)) sendNoLoot(event.getPlayer());
+            service.openVirtual(event.getPlayer(), block, node);
             return;
         }
 
-        // CHEST/BARREL: genera el loot justo antes de que Minecraft abra el
-        // inventario físico. El contenido queda en slots aleatorios y el bloque
-        // nunca se elimina automáticamente al vaciarse.
-        if (!service.ensurePhysicalInventoryGenerated(block, node)) {
-            event.setCancelled(true);
-            sendNoLoot(event.getPlayer());
-        }
+        // CHEST/BARREL: intenta generar el loot justo antes de que Minecraft abra
+        // el inventario físico. Si la tabla está vacía, se abre como cofre/barril
+        // vacío y permanece en el mundo.
+        service.ensurePhysicalInventoryGenerated(block, node);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -70,20 +70,21 @@ public final class LootNodeListener implements Listener {
             event.setExpToDrop(0);
 
             if (node.containerType() == LootContainerType.PLAYER_HEAD) {
-                // Las bolsas/cabezas siguen siendo el único tipo que desaparece
-                // automáticamente cuando su inventario virtual queda vacío.
+                // Romper una bolsa nunca dropea la PLAYER_HEAD. En su lugar suelta
+                // todo el loot que todavía conserve; si no hay loot válido, solo
+                // desaparece. Se maneja manualmente para evitar duplicaciones.
                 event.setDropItems(false);
                 event.setCancelled(true);
-                event.getPlayer().sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eVacía esta bolsa para retirarla.");
+                service.breakVirtualHead(block, node);
                 return;
             }
 
             if (node.containerType() == LootContainerType.DECORATED_POT) {
-                // Si nunca fue reclamada, romperla también entrega su premio.
-                // No cancelamos el break: la vasija solo desaparece porque el
-                // jugador la destruyó. Evitamos que además dropee la vasija item.
+                // Si nunca fue reclamada, romperla intenta entregar su premio.
+                // Si no hay recompensa válida, simplemente se rompe sin dar nada.
+                // Evitamos que además dropee la propia vasija/item decorativo.
                 event.setDropItems(false);
-                if (!service.claimPot(block)) sendNoLoot(event.getPlayer());
+                service.claimPot(block);
                 return;
             }
 
@@ -136,9 +137,6 @@ public final class LootNodeListener implements Listener {
         }
     }
 
-    private static void sendNoLoot(org.bukkit.entity.Player player) {
-        player.sendMessage("§6§l[§5§lMDVCRAFT§6§l]  §4»  §eEste contenedor todavía no tiene recompensas válidas configuradas.");
-    }
 
     private static Block holderBlock(InventoryHolder holder) {
         return holder instanceof BlockInventoryHolder blockHolder ? blockHolder.getBlock() : null;

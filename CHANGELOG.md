@@ -1,3 +1,13 @@
+# MDVHeadOres 1.3.4
+
+- PLAYER_HEAD: click derecho sobre una bolsa sin loot válido la elimina silenciosamente.
+- PLAYER_HEAD: ahora se puede romper; suelta todo el loot restante y nunca dropea la cabeza.
+- PLAYER_HEAD: si estaba abierta, al romperla cierra visores y evita duplicaciones.
+- CHEST/BARREL: si no hay loot válido, abren vacíos y permanecen.
+- DECORATED_POT: si no hay loot válido, permanece al click y al romperse no entrega premio.
+- Eliminados los mensajes de "sin recompensas configuradas" durante interacción normal.
+- Sin cambios de config respecto de 1.3.3.
+
 # MDVHeadOres 1.3.3
 
 - Corrige CHEST/BARREL que podían abrirse vacíos por actualizar un TileState capturado antes de insertar el loot.

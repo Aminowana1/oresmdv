@@ -1,4 +1,4 @@
-# Loot Nodes — MDVHeadOres 1.3.3
+# Loot Nodes — MDVHeadOres 1.3.4
 
 ## Tipos de contenedor
 
@@ -122,3 +122,10 @@ Al actualizar desde 1.3.2 o anterior, el viejo `lootnodes.yml` se divide automá
 ## Cofres/barriles físicos (1.3.3)
 
 El PDC se persiste antes de insertar los premios y luego se reaccede al inventario real del bloque. Esto evita que un `BlockState` anterior sobrescriba el inventario y deje el cofre vacío. Los premios se colocan en slots vacíos barajados aleatoriamente.
+
+
+## Comportamiento de contenedores (1.3.4)
+
+- `PLAYER_HEAD`: click derecho abre el inventario; si no hay loot válido, desaparece. Al romperla, suelta el loot restante y nunca dropea la cabeza.
+- `CHEST` / `BARREL`: permanecen aunque estén vacíos.
+- `DECORATED_POT`: permanece después de reclamar; si no hay premio válido, el click no hace nada. Solo desaparece al romperse.

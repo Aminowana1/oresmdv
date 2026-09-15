@@ -1,6 +1,7 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.3.3: loot nodes separados por YAML; cofres/vasijas persistentes; fix de inventario físico.
+# v1.3.4: bolsas rompibles con drop de loot; bolsas vacías desaparecen;
+# cofres/barriles/vasijas vacíos permanecen sin mensajes.
 # v1.3.1: editor paginado de loot nodes y soporte completo para libros encantados/vanilla con metadata.
 # v1.3.0: añade spawn manual de loot nodes, cabezas colocables de recursos y loot de equipo aleatorio/no identificado.
 
