@@ -77,6 +77,9 @@ Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucció
 3. Solo el bit 11 debe quedar pendiente/procesarse; las vetas y nodos anteriores no deben duplicarse.
 4. Ejecuta una pregeneración con Chunky y observa `/mdvheadores queue`: los chunks deben pasar por la misma cola de MDVHeadOres.
 5. La pregeneración no debe crear una segunda cola ni mantener forzados chunks descargados.
+6. Para pregeneraciones masivas, activa `chunky-compatibility.direct-process-on-populate: true`.
+7. Durante ese modo, `/mdvheadores queue` debe mantenerse prácticamente vacío mientras `Procesados` aumenta.
+8. Detén Chunky, visita varios chunks pregenerados y usa `/mdvheadores inspect`: deben mostrar todos los bits activos completados.
 
 
 ## Administración 1.3.0

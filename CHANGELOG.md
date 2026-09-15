@@ -1,3 +1,11 @@
+# MDVHeadOres 1.3.6
+
+- Añade `chunky-compatibility.direct-process-on-populate` para pregeneraciones masivas.
+- Con el modo directo activo, vetas, nodos y loot nodes se procesan dentro de `ChunkPopulateEvent` antes de que Chunky pueda descargar el chunk.
+- El modo directo elimina cualquier entrada duplicada de la cola principal/reintentos y aplica backpressure natural a Chunky, evitando depender de colas gigantes en RAM.
+- Se recomienda activarlo solo durante la pregeneración y volverlo a `false` al terminar.
+- El comportamiento normal de exploración y throttle no cambia cuando la opción está en `false`.
+
 # MDVHeadOres 1.3.5
 
 - Los MMOItems de loot nodes ya no se fuerzan todos a no identificados.

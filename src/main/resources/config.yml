@@ -787,7 +787,12 @@ loot-nodes:
 
 # Compatibilidad global con pregeneradores como Chunky.
 # Afecta vetas, nodos de árboles y loot nodes por igual.
-# ChunkPopulateEvent entra a LA MISMA cola con deduplicación y throttle.
 chunky-compatibility:
   enabled: true
   listen-chunk-populate: true
+
+  # MODO PREGENERACION: recomendado SOLO mientras Chunky genera un mundo grande.
+  # Procesa MDVHeadOres directamente en ChunkPopulateEvent, antes de que Chunky
+  # descargue el chunk. Evita colas gigantes y garantiza que cada chunk generado
+  # tenga sus tiradas persistidas. Al terminar Chunky, vuelve a false.
+  direct-process-on-populate: false

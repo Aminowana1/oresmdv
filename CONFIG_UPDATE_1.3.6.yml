@@ -1,0 +1,5 @@
+# Añadir dentro de chunky-compatibility:
+chunky-compatibility:
+  enabled: true
+  listen-chunk-populate: true
+  direct-process-on-populate: false

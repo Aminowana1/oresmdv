@@ -1,4 +1,4 @@
-# MDVHeadOres 1.3.5
+# MDVHeadOres 1.3.6
 
 Generador de vetas y nodos visuales mediante cabezas de jugador, con drops de MMOItems, poder de pico/hacha, experiencia opcional de MMOCore y seguimiento compacto por chunk.
 
@@ -105,7 +105,7 @@ mvn -B clean package
 Resultado:
 
 ```text
-target/MDVHeadOres-1.3.5.jar
+target/MDVHeadOres-1.3.6.jar
 ```
 
 También incluye `.github/workflows/build.yml` para GitHub Actions.
@@ -134,6 +134,13 @@ También incluye `.github/workflows/build.yml` para GitHub Actions.
 - `head` entrega una cabeza colocable. Al ponerla en el mundo queda marcada como la misma veta/nodo que generaría MDVHeadOres naturalmente.
 - El equipamiento MMOItems generado como loot se tira desde el template para obtener modifiers aleatorios. Solo los tipos configurados en `loot-nodes.mmoitems.unidentified.types` se entregan no identificados.
 
+
+## 1.3.6 - Pregeneración masiva con Chunky
+
+- Añade `chunky-compatibility.direct-process-on-populate`.
+- Durante una pregeneración masiva, procesa cada chunk dentro de `ChunkPopulateEvent` antes de que Chunky pueda descargarlo.
+- Evita necesitar colas gigantes y garantiza que las tiradas queden persistidas en cada chunk pregenerado.
+- Se recomienda volver la opción a `false` al terminar la pregeneración.
 
 ## 1.3.5
 

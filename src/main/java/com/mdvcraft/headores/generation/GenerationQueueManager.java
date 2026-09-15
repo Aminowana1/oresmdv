@@ -151,6 +151,21 @@ public final class GenerationQueueManager {
         if (!settings.chunky().enabled() || !settings.chunky().listenChunkPopulate()) return;
         long mask = tracker.prepareChunk(chunk, true);
         if (!tracker.hasMissingActiveRolls(mask)) return;
+
+        // Modo de pregeneración robusto: procesa el chunk DURANTE ChunkPopulateEvent,
+        // antes de que Chunky pueda descargarlo. Esto introduce backpressure natural
+        // (Chunky solo avanza cuando termina MDVHeadOres), evita colas gigantes y
+        // garantiza que cada chunk pregenerado quede con sus tiradas persistidas.
+        // Está pensado para activarse temporalmente al pregenerar mundos grandes.
+        if (settings.chunky().directProcessOnPopulate() && Bukkit.isPrimaryThread()) {
+            ChunkKey key = ChunkKey.of(chunk);
+            queue.remove(key);
+            retryQueue.remove(key);
+            generator.generate(chunk, false, false);
+            processedTotal++;
+            return;
+        }
+
         if (settings.throttle().enabled()) {
             enqueuePrepared(chunk, mask, false, false, true);
             // El chunk ya terminó de poblarse: lo promovemos a listo sin saltarnos

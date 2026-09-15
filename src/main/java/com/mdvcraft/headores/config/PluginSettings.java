@@ -112,7 +112,8 @@ public record PluginSettings(
 
         ChunkyCompatibility chunky = new ChunkyCompatibility(
                 cfg.getBoolean("chunky-compatibility.enabled", true),
-                cfg.getBoolean("chunky-compatibility.listen-chunk-populate", true)
+                cfg.getBoolean("chunky-compatibility.listen-chunk-populate", true),
+                cfg.getBoolean("chunky-compatibility.direct-process-on-populate", false)
         );
 
         return new PluginSettings(
@@ -175,7 +176,8 @@ public record PluginSettings(
 
     public record ChunkyCompatibility(
             boolean enabled,
-            boolean listenChunkPopulate
+            boolean listenChunkPopulate,
+            boolean directProcessOnPopulate
     ) {}
 
     public record ResourceProtection(
