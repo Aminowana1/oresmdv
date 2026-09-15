@@ -214,6 +214,16 @@ public final class LootNodeRegistry {
                 Material material = Material.matchMaterial(entry.getString("material", ""));
                 yield material == null || material == Material.AIR ? null : LootItemReference.vanilla(material);
             }
+            case CUSTOM_VANILLA -> {
+                String encoded = entry.getString("item-data", "").trim();
+                if (encoded.isEmpty()) yield null;
+                try {
+                    byte[] bytes = Base64.getDecoder().decode(encoded);
+                    yield LootItemReference.customVanilla(bytes);
+                } catch (Throwable ignored) {
+                    yield null;
+                }
+            }
             case MMOITEM -> {
                 String itemType = entry.getString("item-type", "").trim();
                 String id = entry.getString("item-id", "").trim();
@@ -266,6 +276,13 @@ public final class LootNodeRegistry {
             yaml.set(path + ".type", entry.item().type().name());
             switch (entry.item().type()) {
                 case VANILLA -> yaml.set(path + ".material", entry.item().vanillaMaterial().name());
+                case CUSTOM_VANILLA -> {
+                    byte[] bytes = entry.item().storedItemBytes();
+                    yaml.set(path + ".item-data", bytes == null ? null : Base64.getEncoder().encodeToString(bytes));
+                    if (entry.item().vanillaMaterial() != null) {
+                        yaml.set(path + ".material", entry.item().vanillaMaterial().name());
+                    }
+                }
                 case MMOITEM -> {
                     yaml.set(path + ".item-type", entry.item().itemType());
                     yaml.set(path + ".item-id", entry.item().itemId());

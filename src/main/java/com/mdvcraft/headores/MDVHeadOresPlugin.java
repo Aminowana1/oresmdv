@@ -7,6 +7,7 @@ import com.mdvcraft.headores.generation.GenerationQueueManager;
 import com.mdvcraft.headores.generation.ResourceGenerator;
 import com.mdvcraft.headores.listener.ChunkGenerationListener;
 import com.mdvcraft.headores.listener.ResourceBreakListener;
+import com.mdvcraft.headores.listener.ManualResourcePlaceListener;
 import com.mdvcraft.headores.listener.ResourceProtectionListener;
 import com.mdvcraft.headores.loot.config.LootNodeRegistry;
 import com.mdvcraft.headores.loot.editor.LootEditorManager;
@@ -17,6 +18,7 @@ import com.mdvcraft.headores.loot.service.LootNodeService;
 import com.mdvcraft.headores.loot.service.LootTableService;
 import com.mdvcraft.headores.service.MmoCoreBridge;
 import com.mdvcraft.headores.service.MmoItemsBridge;
+import com.mdvcraft.headores.service.ManualResourceService;
 import com.mdvcraft.headores.service.ToolPowerService;
 import com.mdvcraft.headores.tracking.ChunkRollTracker;
 import com.mdvcraft.headores.tracking.ResourceKeys;
@@ -36,6 +38,8 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
     private ResourceRegistry registry;
     private ChunkRollTracker tracker;
     private ResourceGenerator generator;
+    private LootNodeGenerator lootNodeGenerator;
+    private ManualResourceService manualResourceService;
     private GenerationQueueManager queueManager;
     private LootNodeRegistry lootNodeRegistry;
     private LootNodeService lootNodeService;
@@ -48,8 +52,12 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
         reloadPlugin();
 
         PluginCommand command = getCommand("mdvheadores");
-        if (command != null) command.setExecutor(new MDVHeadOresCommand(this));
-        getLogger().info("MDVHeadOres 1.2.0 activado. Vetas: " + registry.ores().size()
+        if (command != null) {
+            MDVHeadOresCommand executor = new MDVHeadOresCommand(this);
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
+        }
+        getLogger().info("MDVHeadOres 1.3.1 activado. Vetas: " + registry.ores().size()
                 + ", nodos: " + registry.treeNodes().size()
                 + ", loot nodes activos: " + lootNodeRegistry.activeNodes().size()
                 + "/" + lootNodeRegistry.allNodes().size()
@@ -73,8 +81,9 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
         registry = ResourceRegistry.load(this, settings);
         lootNodeRegistry = LootNodeRegistry.load(this, settings, registry);
         tracker = new ChunkRollTracker(this, keys, settings, registry, lootNodeRegistry);
-        LootNodeGenerator lootGenerator = new LootNodeGenerator(this, keys);
-        generator = new ResourceGenerator(this, settings, registry, tracker, keys, lootNodeRegistry, lootGenerator);
+        lootNodeGenerator = new LootNodeGenerator(this, keys);
+        generator = new ResourceGenerator(this, settings, registry, tracker, keys, lootNodeRegistry, lootNodeGenerator);
+        manualResourceService = new ManualResourceService(this, registry, keys);
         queueManager = new GenerationQueueManager(this, settings, tracker, generator);
 
         ToolPowerService toolPower = new ToolPowerService(this, settings);
@@ -83,10 +92,11 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
         LootItemResolver lootResolver = new LootItemResolver(this, settings.debug());
         LootTableService lootTables = new LootTableService(lootResolver);
         lootNodeService = new LootNodeService(this, keys, lootNodeRegistry, lootTables);
-        lootEditor = new LootEditorManager(lootNodeRegistry, lootResolver);
+        lootEditor = new LootEditorManager(lootNodeRegistry, lootResolver, settings.lootNodes().editorRewardsPerPage());
 
         runtimeListeners.add(new ChunkGenerationListener(queueManager));
         runtimeListeners.add(new ResourceProtectionListener(this, settings, keys));
+        runtimeListeners.add(new ManualResourcePlaceListener(manualResourceService));
         runtimeListeners.add(new ResourceBreakListener(
                 this, settings, registry, keys, toolPower, mmoItems, mmoCore));
         runtimeListeners.add(new LootNodeListener(this, lootNodeService));
@@ -107,6 +117,8 @@ public final class MDVHeadOresPlugin extends JavaPlugin {
     public ResourceRegistry registry() { return registry; }
     public ChunkRollTracker tracker() { return tracker; }
     public ResourceGenerator generator() { return generator; }
+    public LootNodeGenerator lootNodeGenerator() { return lootNodeGenerator; }
+    public ManualResourceService manualResources() { return manualResourceService; }
     public GenerationQueueManager queueManager() { return queueManager; }
     public LootNodeRegistry lootNodeRegistry() { return lootNodeRegistry; }
     public LootEditorManager lootEditor() { return lootEditor; }

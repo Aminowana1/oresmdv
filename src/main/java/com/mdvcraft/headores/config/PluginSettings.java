@@ -77,7 +77,8 @@ public record PluginSettings(
         LootNodesSettings lootNodes = new LootNodesSettings(
                 cfg.getBoolean("loot-nodes.enabled", true),
                 cfg.getString("loot-nodes.file", "lootnodes.yml"),
-                cfg.getBoolean("loot-nodes.editor.enabled", true)
+                cfg.getBoolean("loot-nodes.editor.enabled", true),
+                Math.max(1, Math.min(45, cfg.getInt("loot-nodes.editor.rewards-per-page", 45)))
         );
 
         ChunkyCompatibility chunky = new ChunkyCompatibility(
@@ -131,7 +132,8 @@ public record PluginSettings(
     public record LootNodesSettings(
             boolean enabled,
             String fileName,
-            boolean editorEnabled
+            boolean editorEnabled,
+            int editorRewardsPerPage
     ) {}
 
     public record ChunkyCompatibility(

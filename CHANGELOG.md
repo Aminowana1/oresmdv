@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1
+- Editor de loot nodes con múltiples páginas y navegación anterior/siguiente.
+- SHIFT+click desde el inventario para añadir recompensas rápidamente, estilo MDVCrates.
+- Soporte correcto para libros encantados y otros vanilla con metadata mediante `CUSTOM_VANILLA`.
+- MMOItems y MythicMobs siguen guardándose por ID para recibir cambios futuros.
+
+
 ## 1.2.0
 
 - Añade `lootnodes.yml` separado para bolsas/cabezas, cofres, barriles y vasijas.
@@ -44,3 +51,10 @@
 ## 1.0.9
 
 - Protección contra agua y lava.
+
+## 1.3.0
+- Añadido `/mdvheadores loot spawn <id>` para generar un loot node exacto en la posición del administrador.
+- Añadido `/mdvheadores head <ore|node> <id> [cantidad]` para obtener cabezas colocables que se convierten en recursos reales.
+- Añadido autocompletado para los nuevos comandos e IDs.
+- El equipamiento MMOItems obtenido desde loot nodes se genera desde el template con modifiers aleatorios y luego se vuelve no identificado.
+- Los previews del editor permanecen identificados y estables.

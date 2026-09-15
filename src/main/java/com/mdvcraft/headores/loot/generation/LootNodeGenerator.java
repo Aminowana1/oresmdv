@@ -56,6 +56,17 @@ public final class LootNodeGenerator {
         this.potterySherds = new ArrayList<>(Tag.ITEMS_DECORATED_POT_SHERDS.getValues());
     }
 
+    /**
+     * Coloca manualmente un loot node en un bloque exacto. No consume la
+     * probabilidad del chunk ni toca su tracking-bit; solo valida soporte y
+     * espacio usando las mismas reglas que la generación natural.
+     */
+    public boolean placeAt(Block target, LootNodeDefinition node) {
+        if (target == null || node == null) return false;
+        if (!canPlace(target, node)) return false;
+        return place(target, node);
+    }
+
     public int generate(Chunk chunk, LootNodeDefinition node) {
         World world = chunk.getWorld();
         int minY = Math.max(world.getMinHeight() + 1, node.minY());

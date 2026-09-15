@@ -33,7 +33,7 @@ public final class LootTableService {
             LootEntry entry = weightedPick(pool, random);
             if (entry == null) break;
             int amount = random.nextInt(entry.minAmount(), entry.maxAmount() + 1);
-            ItemStack built = resolver.build(entry.item(), amount);
+            ItemStack built = resolver.buildLoot(entry.item(), amount);
             if (built != null) {
                 if (!merge(result, built, table.mergeSameItems())) {
                     if (result.size() >= table.maxSlots()) break;

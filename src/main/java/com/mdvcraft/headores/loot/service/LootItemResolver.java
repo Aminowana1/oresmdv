@@ -4,7 +4,6 @@ import com.mdvcraft.headores.loot.model.LootItemReference;
 import com.mdvcraft.headores.service.MmoItemsBridge;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Method;
@@ -32,8 +31,10 @@ public final class LootItemResolver {
         String mythicId = mythicItems.identify(stack);
         if (mythicId != null && !mythicId.isBlank()) return LootItemReference.mythic(mythicId);
 
-        if (looksCustom(stack)) return null;
-        return LootItemReference.vanilla(stack.getType());
+        if (isPlainVanilla(stack)) return LootItemReference.vanilla(stack.getType());
+        // Vanilla con metadata/componentes (por ejemplo ENCHANTED_BOOK con
+        // StoredEnchantments, pociones, mapas, items renombrados/encantados, etc.).
+        return LootItemReference.customVanilla(stack);
     }
 
     public ItemStack build(LootItemReference ref, int amount) {
@@ -41,7 +42,23 @@ public final class LootItemResolver {
         int safeAmount = Math.max(1, amount);
         ItemStack stack = switch (ref.type()) {
             case VANILLA -> new ItemStack(ref.vanillaMaterial(), safeAmount);
+            case CUSTOM_VANILLA -> ref.storedItem();
             case MMOITEM -> mmoItems.buildItem(ref.itemType(), ref.itemId(), safeAmount);
+            case MYTHICMOBS -> mythicItems.buildItem(ref.itemId(), safeAmount);
+        };
+        if (stack == null || stack.getType() == Material.AIR) return null;
+        stack.setAmount(Math.max(1, Math.min(safeAmount, stack.getMaxStackSize())));
+        return stack;
+    }
+
+    /** Construcción real de recompensas de loot nodes. */
+    public ItemStack buildLoot(LootItemReference ref, int amount) {
+        if (ref == null) return null;
+        int safeAmount = Math.max(1, amount);
+        ItemStack stack = switch (ref.type()) {
+            case VANILLA -> new ItemStack(ref.vanillaMaterial(), safeAmount);
+            case CUSTOM_VANILLA -> ref.storedItem();
+            case MMOITEM -> mmoItems.buildLootItem(ref.itemType(), ref.itemId(), safeAmount);
             case MYTHICMOBS -> mythicItems.buildItem(ref.itemId(), safeAmount);
         };
         if (stack == null || stack.getType() == Material.AIR) return null;
@@ -110,10 +127,10 @@ public final class LootItemResolver {
         return raw == null || raw.isBlank() ? null : raw.toUpperCase(Locale.ROOT);
     }
 
-    private static boolean looksCustom(ItemStack stack) {
-        ItemMeta meta = stack.getItemMeta();
-        if (meta == null) return false;
-        return meta.hasDisplayName() || meta.hasLore() || meta.hasCustomModelData()
-                || !meta.getPersistentDataContainer().getKeys().isEmpty();
+    private static boolean isPlainVanilla(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || !stack.getType().isItem()) return false;
+        // isSimilar ignora amount y compara metadata/componentes. Esto detecta
+        // correctamente libros encantados y cualquier otro vanilla con estado.
+        return stack.isSimilar(new ItemStack(stack.getType()));
     }
 }

@@ -14,6 +14,8 @@ public final class ResourceKeys {
     private final NamespacedKey lootNodeKey;
     private final NamespacedKey lootGeneratedKey;
     private final NamespacedKey lootContentsKey;
+    private final NamespacedKey manualResourceKindKey;
+    private final NamespacedKey manualResourceIdKey;
 
     public ResourceKeys(Plugin plugin) {
         oreKey = new NamespacedKey(plugin, "ore_key");
@@ -26,6 +28,8 @@ public final class ResourceKeys {
         lootNodeKey = new NamespacedKey(plugin, "loot_node_key");
         lootGeneratedKey = new NamespacedKey(plugin, "loot_generated");
         lootContentsKey = new NamespacedKey(plugin, "loot_contents");
+        manualResourceKindKey = new NamespacedKey(plugin, "manual_resource_kind");
+        manualResourceIdKey = new NamespacedKey(plugin, "manual_resource_id");
     }
 
     public NamespacedKey oreKey() { return oreKey; }
@@ -38,4 +42,6 @@ public final class ResourceKeys {
     public NamespacedKey lootNodeKey() { return lootNodeKey; }
     public NamespacedKey lootGeneratedKey() { return lootGeneratedKey; }
     public NamespacedKey lootContentsKey() { return lootContentsKey; }
+    public NamespacedKey manualResourceKindKey() { return manualResourceKindKey; }
+    public NamespacedKey manualResourceIdKey() { return manualResourceIdKey; }
 }

@@ -1,4 +1,4 @@
-# Loot Nodes — MDVHeadOres 1.2.0
+# Loot Nodes — MDVHeadOres 1.3.1
 
 ## Tipos de contenedor
 
@@ -79,3 +79,25 @@ El loot es compartido entre jugadores. Un contenedor abierto no vuelve a tirar s
 - No se puede formar un cofre doble con un cofre de loot.
 - Las protecciones existentes contra pistones, líquidos, explosiones y física también reconocen los loot nodes.
 - Una vasija marca su premio como reclamado antes de soltarlo para impedir doble entrega por eventos del mismo tick.
+
+## Administración 1.3.0
+
+### Generar un nodo sin buscarlo
+
+```text
+/mdvheadores loot spawn <id>
+```
+
+Lo coloca exactamente en el bloque donde están los pies del jugador. Debe existir un bloque sólido debajo y el espacio debe ser válido para el tipo de contenedor. Esta colocación administrativa no altera el tracking del chunk.
+
+### Equipamiento MMOItems
+
+Cuando una entrada `MMOITEM` corresponde a equipamiento, MDVHeadOres genera una instancia real del template para que MMOItems aplique sus modifiers aleatorios. Después la convierte a no identificada antes de introducirla en el contenedor.
+
+El item que el jugador identifica más tarde conserva la tirada generada al abrir/romper el loot node. Los materiales y consumibles MMOItems no se fuerzan a no identificados.
+
+## Editor paginado y vanilla con metadata (1.3.1)
+
+`/mdvheadores loot editor <id>` soporta múltiples páginas. Usa **SHIFT+click** en un objeto de tu inventario para añadir una copia rápidamente, o el método de cursor + slot vacío.
+
+Los MMOItems/MythicMobs se guardan por ID. Los vanilla simples se guardan por Material. Los vanilla con metadata/componentes (incluidos los libros encantados) se guardan como `CUSTOM_VANILLA` para preservar exactamente sus encantamientos y demás datos.

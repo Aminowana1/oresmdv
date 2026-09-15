@@ -2,6 +2,10 @@ package com.mdvcraft.headores.command;
 
 import com.mdvcraft.headores.MDVHeadOresPlugin;
 import com.mdvcraft.headores.generation.QueueSnapshot;
+import com.mdvcraft.headores.loot.model.LootNodeDefinition;
+import com.mdvcraft.headores.model.OreDefinition;
+import com.mdvcraft.headores.model.ResourceDefinition;
+import com.mdvcraft.headores.service.ManualResourceService;
 import com.mdvcraft.headores.tracking.ChunkRollTracker;
 import com.mdvcraft.headores.tracking.ResourceKeys;
 import com.mdvcraft.headores.util.FormatUtil;
@@ -11,16 +15,20 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.TileState;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
-import com.mdvcraft.headores.loot.model.LootNodeDefinition;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
-public final class MDVHeadOresCommand implements CommandExecutor {
+public final class MDVHeadOresCommand implements TabExecutor {
     private static final String PREFIX = "§6§l[§5§lMDVCRAFT§6§l]  §4»  ";
     private final MDVHeadOresPlugin plugin;
 
@@ -39,12 +47,13 @@ public final class MDVHeadOresCommand implements CommandExecutor {
             return true;
         }
 
-        return switch (args[0].toLowerCase()) {
+        return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "reload" -> reload(sender);
             case "inspect" -> inspect(sender);
             case "queue", "status", "cola", "estado" -> status(sender);
             case "generate" -> generate(sender, args);
             case "loot" -> loot(sender, args);
+            case "head", "cabeza" -> head(sender, args);
             default -> {
                 sendUsage(sender);
                 yield true;
@@ -185,7 +194,7 @@ public final class MDVHeadOresCommand implements CommandExecutor {
 
     private boolean loot(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor> [id]");
+            sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor|spawn> [id]");
             return true;
         }
         if (args[1].equalsIgnoreCase("list")) {
@@ -216,11 +225,144 @@ public final class MDVHeadOresCommand implements CommandExecutor {
             }
             return true;
         }
-        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor> [id]");
+        if (args[1].equalsIgnoreCase("spawn") || args[1].equalsIgnoreCase("generar")
+                || args[1].equalsIgnoreCase("place")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(PREFIX + "§cSolo un jugador puede generar un loot node en su ubicación.");
+                return true;
+            }
+            if (args.length < 3) {
+                sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot spawn <id>");
+                return true;
+            }
+            LootNodeDefinition node = plugin.lootNodeRegistry().node(args[2].toLowerCase(Locale.ROOT));
+            if (node == null) {
+                sender.sendMessage(PREFIX + "§cNo existe el loot node '" + args[2] + "'.");
+                return true;
+            }
+            Block target = player.getLocation().getBlock();
+            if (!plugin.lootNodeGenerator().placeAt(target, node)) {
+                sender.sendMessage(PREFIX + "§cNo pude colocarlo exactamente en tu posición. "
+                        + "§7Debes estar sobre un bloque sólido y el espacio debe ser reemplazable/libre.");
+                return true;
+            }
+            sender.sendMessage(PREFIX + "§aLoot node §f" + node.key() + " §agenerado en §f"
+                    + target.getWorld().getName() + " " + target.getX() + " " + target.getY() + " " + target.getZ()
+                    + "§a. El botín se tirará normalmente en el primer acceso.");
+            return true;
+        }
+        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores loot <list|editor|spawn> [id]");
         return true;
     }
 
+    private boolean head(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(PREFIX + "§cEste comando solo puede usarlo un jugador.");
+            return true;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(PREFIX + "§eUsa: /mdvheadores head <list|ore|node|id> [id] [cantidad]");
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("list")) {
+            sender.sendMessage(PREFIX + "§dVetas disponibles: §f" + String.join("§7, §f", plugin.registry().ores().keySet()));
+            sender.sendMessage(PREFIX + "§dNodos disponibles: §f" + String.join("§7, §f", plugin.registry().treeNodes().keySet()));
+            return true;
+        }
+
+        String kind;
+        String id;
+        int amountIndex;
+        if (isOreWord(args[1]) || isNodeWord(args[1])) {
+            if (args.length < 3) {
+                sender.sendMessage(PREFIX + "§eUsa: /mdvheadores head " + args[1] + " <id> [cantidad]");
+                return true;
+            }
+            kind = isOreWord(args[1]) ? ManualResourceService.KIND_ORE : ManualResourceService.KIND_NODE;
+            id = args[2];
+            amountIndex = 3;
+        } else {
+            id = args[1];
+            ResourceDefinition resource = plugin.manualResources().findAny(id);
+            if (resource == null) {
+                sender.sendMessage(PREFIX + "§cNo existe ninguna veta o nodo con ID '" + id + "'.");
+                return true;
+            }
+            kind = resource instanceof OreDefinition ? ManualResourceService.KIND_ORE : ManualResourceService.KIND_NODE;
+            amountIndex = 2;
+        }
+
+        int amount = 1;
+        if (args.length > amountIndex) {
+            try {
+                amount = Math.max(1, Math.min(64, Integer.parseInt(args[amountIndex])));
+            } catch (NumberFormatException exception) {
+                sender.sendMessage(PREFIX + "§cCantidad inválida. Usa un número entre 1 y 64.");
+                return true;
+            }
+        }
+
+        ItemStack head = plugin.manualResources().createHead(kind, id, amount);
+        if (head == null) {
+            sender.sendMessage(PREFIX + "§cNo existe ese recurso o no pude crear su cabeza.");
+            return true;
+        }
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(head);
+        leftovers.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+        sender.sendMessage(PREFIX + "§aRecibiste §f" + amount + "§a cabeza(s) colocable(s) del recurso §f" + id
+                + "§a. Al colocarlas serán minerales/nodos reales de MDVHeadOres.");
+        return true;
+    }
+
+    private static boolean isOreWord(String raw) {
+        return raw.equalsIgnoreCase("ore") || raw.equalsIgnoreCase("ores")
+                || raw.equalsIgnoreCase("veta") || raw.equalsIgnoreCase("mineral");
+    }
+
+    private static boolean isNodeWord(String raw) {
+        return raw.equalsIgnoreCase("node") || raw.equalsIgnoreCase("nodo")
+                || raw.equalsIgnoreCase("tree") || raw.equalsIgnoreCase("tree-node");
+    }
+
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage(PREFIX + "§eUsa: /mdvheadores reload, inspect, queue, generate <radio> [force] o loot <list|editor>");
+        sender.sendMessage(PREFIX + "§eComandos:");
+        sender.sendMessage("§7/mdvheadores reload");
+        sender.sendMessage("§7/mdvheadores inspect");
+        sender.sendMessage("§7/mdvheadores queue");
+        sender.sendMessage("§7/mdvheadores generate <radio> [force]");
+        sender.sendMessage("§7/mdvheadores loot <list|editor|spawn> [id]");
+        sender.sendMessage("§7/mdvheadores head <list|ore|node|id> [id] [cantidad]");
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!sender.hasPermission("mdvheadores.admin")) return List.of();
+        if (args.length == 1) return filter(List.of("reload", "inspect", "queue", "generate", "loot", "head"), args[0]);
+
+        if (args[0].equalsIgnoreCase("loot")) {
+            if (args.length == 2) return filter(List.of("list", "editor", "spawn"), args[1]);
+            if (args.length == 3 && (args[1].equalsIgnoreCase("editor") || args[1].equalsIgnoreCase("spawn")
+                    || args[1].equalsIgnoreCase("generar") || args[1].equalsIgnoreCase("place"))) {
+                return filter(plugin.lootNodeRegistry().allNodes().stream().map(LootNodeDefinition::key).toList(), args[2]);
+            }
+        }
+
+        if (args[0].equalsIgnoreCase("head") || args[0].equalsIgnoreCase("cabeza")) {
+            if (args.length == 2) {
+                List<String> values = new ArrayList<>(List.of("list", "ore", "node"));
+                values.addAll(plugin.registry().ores().keySet());
+                values.addAll(plugin.registry().treeNodes().keySet());
+                return filter(values, args[1]);
+            }
+            if (args.length == 3 && isOreWord(args[1])) return filter(plugin.registry().ores().keySet(), args[2]);
+            if (args.length == 3 && isNodeWord(args[1])) return filter(plugin.registry().treeNodes().keySet(), args[2]);
+        }
+        return List.of();
+    }
+
+    private static List<String> filter(Collection<String> values, String token) {
+        String prefix = token == null ? "" : token.toLowerCase(Locale.ROOT);
+        return values.stream().filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix)).sorted().toList();
     }
 }

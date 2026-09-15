@@ -1,4 +1,4 @@
-# Pruebas recomendadas para MDVHeadOres 1.2.0
+# Pruebas recomendadas para MDVHeadOres 1.3.0
 
 ## 1. Compilación
 
@@ -77,3 +77,23 @@ Probar agua, lava, cubeta, TNT, creeper, pistón, pistón pegajoso y destrucció
 3. Solo el bit 11 debe quedar pendiente/procesarse; las vetas y nodos anteriores no deben duplicarse.
 4. Ejecuta una pregeneración con Chunky y observa `/mdvheadores queue`: los chunks deben pasar por la misma cola de MDVHeadOres.
 5. La pregeneración no debe crear una segunda cola ni mantener forzados chunks descargados.
+
+
+## Administración 1.3.0
+
+1. `/mdvheadores loot spawn <id>` debe colocar el loot node en el bloque de los pies si hay soporte y espacio válidos.
+2. El spawn manual no debe marcar el tracking-bit del chunk ni consumir la probabilidad natural.
+3. `/mdvheadores head ore <id>` y `/mdvheadores head node <id>` deben entregar cabezas colocables.
+4. Al colocar una cabeza administrativa, `/mdvheadores inspect` debe detectarla como veta/nodo real.
+5. Al romperla debe respetar potencia de herramienta, drops y XP normales.
+6. Un MMOItem de equipamiento obtenido desde loot node debe salir con la tirada de modifiers de MMOItems y no identificado.
+7. El preview del editor debe seguir siendo estable/identificado y no consumir tiradas aleatorias.
+
+## Editor y libros encantados 1.3.1
+
+1. Crea/usa un loot node y abre `/mdvheadores loot editor <id>`.
+2. Añade más de 45 recompensas usando SHIFT+click desde el inventario. Comprueba navegación anterior/siguiente y que al editar/eliminar se regrese a la página correcta.
+3. Añade un `ENCHANTED_BOOK` con uno o más encantamientos almacenados. Cierra, ejecuta `/mdvheadores reload` y vuelve a abrir el editor: el preview debe conservar exactamente los encantamientos.
+4. Fuerza/genera el loot node y comprueba que el libro obtenido conserva los mismos encantamientos.
+5. Comprueba que MMOItems siguen apareciendo en `lootnodes.yml` como `type: MMOITEM` + `item-type` + `item-id`, y MythicMobs como `type: MYTHICMOBS` + `item-id`.
+6. Comprueba que un vanilla simple sigue guardándose solo como `type: VANILLA` + `material`, mientras que el libro encantado usa `type: CUSTOM_VANILLA` + `item-data`.

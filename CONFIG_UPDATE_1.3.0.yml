@@ -1,0 +1,21 @@
+# ==========================================================
+# MDVHeadOres 1.3.0 - Actualizacion desde 1.2.0
+# ==========================================================
+# NO hay claves obligatorias nuevas.
+#
+# Conserva tus archivos actuales:
+#   plugins/MDVHeadOres/config.yml
+#   plugins/MDVHeadOres/lootnodes.yml
+#
+# Funciones nuevas incluidas por codigo:
+#   /mdvheadores loot spawn <id>
+#   /mdvheadores head list
+#   /mdvheadores head ore <id> [cantidad]
+#   /mdvheadores head node <id> [cantidad]
+#   /mdvheadores head <id> [cantidad]
+#
+# Los MMOItems de EQUIPAMIENTO obtenidos desde loot nodes se generan:
+#   - con la tirada de modificadores propia de MMOItems
+#   - siempre sin identificar
+#
+# Los previews del editor y los drops normales de vetas/nodos no cambian.

@@ -1,5 +1,5 @@
 # ==========================================================
-# MDVHeadOres 1.2.0 - Loot Nodes
+# MDVHeadOres 1.3.1 - Loot Nodes
 #
 # IMPORTANTE:
 # - Cada loot node necesita un tracking-bit ÚNICO entre 0 y 62.
@@ -9,6 +9,10 @@
 # - Puedes dejar un nodo enabled: false, editar su loot y activarlo cuando esté listo.
 # - El loot se genera al primer acceso, no durante la generación del chunk.
 # - Tipos soportados: PLAYER_HEAD, CHEST, BARREL y DECORATED_POT.
+# - Admin: /mdvheadores loot spawn <id> genera el nodo exacto en tus pies.
+# - Los MMOItems de equipamiento obtenidos como loot se generan con modifiers
+#   aleatorios (si el template los tiene) y siempre salen sin identificar.
+# - El editor sigue mostrando previews normales/identificados para facilitar edición.
 # ==========================================================
 
 loot-nodes:

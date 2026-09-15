@@ -1,6 +1,7 @@
 # MDVHeadOres
 # Genera vetas visuales usando PLAYER_HEAD con la textura tomada desde MMOItems.
-# v1.2.0: añade loot nodes diferidos, editor de botín y compatibilidad con pregeneración/Chunky.
+# v1.3.1: editor paginado de loot nodes y soporte completo para libros encantados/vanilla con metadata.
+# v1.3.0: añade spawn manual de loot nodes, cabezas colocables de recursos y loot de equipo aleatorio/no identificado.
 
 debug: false
 
@@ -749,6 +750,10 @@ loot-nodes:
   # /mdvheadores loot editor <id>
   editor:
     enabled: true
+
+    # Cantidad de recompensas visibles por página en /mdvheadores loot editor <id>.
+    # Máximo 45 porque la última fila se reserva para controles.
+    rewards-per-page: 45
 
 # Compatibilidad global con pregeneradores como Chunky.
 # Afecta vetas, nodos de árboles y loot nodes por igual.
